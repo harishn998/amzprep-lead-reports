@@ -23,6 +23,12 @@
       "template_file": "Weekly Lead Report - Walmart.html",
       "recipient_email": "walmart@amzprep.com",
       "active": true
+    },
+    {
+      "partner_name": "Hyla 437",
+      "template_file": "Weekly Lead Report - Hyla 437.html",
+      "recipient_email": "shop437@amzprep.com",
+      "active": true
     }
   ],
   "notes": {
