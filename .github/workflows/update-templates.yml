@@ -1,0 +1,59 @@
+name: Update Weekly Lead Report Templates
+
+on:
+  # Runs every Sunday at 04:00 UTC = 11:00 PM EST (UTC-5) / 12:00 AM EDT (UTC-4)
+  # GitHub Actions uses UTC — 04:00 UTC covers both EST and EDT
+  schedule:
+    - cron: '0 4 * * 1'
+
+  # Also allows manual trigger from GitHub UI for testing
+  workflow_dispatch:
+    inputs:
+      partner_name:
+        description: 'Run for specific partner only (leave blank for all partners)'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry run — fetch data but do NOT push to Design Manager'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  update-templates:
+    name: Update HubSpot Design Manager Templates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Run template update script
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PARTNER_FILTER: ${{ github.event.inputs.partner_name }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          python scripts/update_templates.py
+
+      - name: Upload run log as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-log-${{ github.run_id }}
+          path: update_log.json
+          retention-days: 30
