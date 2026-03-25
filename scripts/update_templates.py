@@ -181,12 +181,36 @@ def generate_variable_block(partner_name, contacts, total_count):
     today     = datetime.now(timezone.utc).strftime("%B %d, %Y")
     send_date = get_next_monday_date()
 
-    # Build unique deal map: deal_id -> hubl variable name
+    # Build unique deal map — ACTIVE deals only (skip closed won/lost)
+    # Closed deals don't change stage so no need for live crm_object calls
+    # This keeps us under HubSpot's 10 crm_object() limit per template
+    SKIP_CLOSED = True  # Set False to include all deals (may exceed limit)
     unique_deals = {}
     for c in contacts:
         did = c.get("deal_id")
         if did and did not in unique_deals:
             unique_deals[did] = f"_deal_{did}"
+
+    if SKIP_CLOSED and len(unique_deals) > 10:
+        # Too many — fetch deal stages to filter out closed ones
+        log(f"  {len(unique_deals)} deals found — filtering to active only to stay under limit", "DEBUG")
+        active_deals = {}
+        for did, var in unique_deals.items():
+            ds_status, ds_resp = hs_request("GET", f"/crm/v3/objects/deals/{did}?properties=dealstage")
+            if ds_status == 200:
+                stage = ds_resp.get("properties", {}).get("dealstage", "")
+                if stage not in {"13390264","13390265","closedwon","closedlost","1271308873","1037017710","1037017711"}:
+                    active_deals[did] = var
+                    log(f"  Keeping active deal {did} (stage: {stage})", "DEBUG")
+                else:
+                    log(f"  Skipping closed deal {did} (stage: {stage})", "DEBUG")
+            time.sleep(0.1)
+        unique_deals = active_deals
+
+    crm_calls = len(unique_deals)
+    log(f"  crm_object calls needed: {crm_calls} active deals (limit=10)", "DEBUG")
+    if crm_calls > 10:
+        log(f"  WARNING: {crm_calls} still exceeds 10 — will trigger HubSpot error", "WARN")
 
     crm_calls = len(unique_deals)
     log(f"  crm_object calls needed: {crm_calls} unique deals (limit=10)", "DEBUG")
@@ -337,21 +361,24 @@ def read_template(filename):
 
 
 def write_template(filename, content):
-    """Upload updated template to HubSpot Design Manager (draft)."""
+    """Upload updated template directly to LIVE in HubSpot Design Manager.
+    Writing to live bypasses the draft->push-to-live step entirely.
+    """
     if DRY_RUN:
         log(f"DRY RUN — would write {len(content)} chars to '{filename}'", "WARN")
         return True
 
     encoded = urllib.parse.quote(filename)
+    # Write directly to live — no push-to-live step needed
     status, resp = hs_request(
         "PUT",
-        f"/cms/v3/source-code/draft/content/{encoded}",
+        f"/cms/v3/source-code/live/content/{encoded}",
         body=content,
         is_multipart=True
     )
 
     if status in (200, 201):
-        log(f"Template written to draft: '{filename}'")
+        log(f"Template written to live: '{filename}' ✅")
         return True
     else:
         log(f"Failed to write template '{filename}': HTTP {status}", "ERROR")
@@ -359,33 +386,9 @@ def write_template(filename, content):
 
 
 def publish_templates(filenames):
-    """Push updated templates from draft to live, one file at a time."""
-    if DRY_RUN:
-        log(f"DRY RUN — would publish {len(filenames)} files to live", "WARN")
-        return True
-
-    all_ok = True
-    for filename in filenames:
-        encoded = urllib.parse.quote(filename)
-        status, resp = hs_request(
-            "POST",
-            f"/cms/v3/source-code/draft/push-to-live/{encoded}"
-        )
-        if status in (200, 202, 204):
-            log(f"Published to live: '{filename}' ✅")
-        else:
-            # Fallback: try alternate endpoint format
-            status2, resp2 = hs_request(
-                "POST",
-                f"/cms/v3/source-code/{encoded}/push-to-live"
-            )
-            if status2 in (200, 202, 204):
-                log(f"Published to live: '{filename}' ✅")
-            else:
-                log(f"Publish failed for '{filename}': HTTP {status}/{status2}", "ERROR")
-                all_ok = False
-        time.sleep(0.3)
-    return all_ok
+    """No-op: templates are now written directly to live, no push step needed."""
+    log(f"Templates written directly to live — no publish step needed ✅")
+    return True
 
 
 # ── Contact ID Extractor ───────────────────────────────────────────
@@ -431,14 +434,17 @@ def process_partner(partner):
 
     result["contacts_found"] = total
 
-    # Fetch deal IDs for contacts that have deals
+    # Fetch deal IDs for contacts — only needed to check deal count vs template
+    # We fetch all but will only use crm_object for ACTIVE (non-closed) deals
+    CLOSED_STAGES = {"13390264", "13390265", "closedwon", "closedlost",
+                     "1271308873"}  # closed lost in affiliate pipeline
     for c in contacts:
         num_deals = int(c["properties"].get("num_associated_deals") or 0)
         if num_deals > 0:
             did = fetch_deal_id(c["id"])
             c["deal_id"] = did
             log(f"  Deal ID for {c['id']}: {did}")
-            time.sleep(0.1)  # Rate limit buffer
+            time.sleep(0.1)
         else:
             c["deal_id"] = None
 
@@ -470,7 +476,34 @@ def process_partner(partner):
     if count_changed:
         log(f"  rpt_total mismatch: template has {current_total}, HubSpot has {total}")
 
-    result["changed"] = bool(added or removed or count_changed)
+    # Also check if any contact status changed (hardcoded in template)
+    import re as _re
+    status_changed = False
+    for c in contacts:
+        cid = c["id"]
+        live_status = (c["properties"].get("hs_lead_status") or "NEW").replace('"', '\"')
+        # Look for this contact's hardcoded status in the template
+        pattern = f'"hs_lead_status": "[^"]*".*?{cid}|{cid}.*?"hs_lead_status": "[^"]*"'
+        # Simpler: check if live status appears near contact ID
+        block_match = _re.search(
+            r'set c\d+ = {.*?"hs_lead_status":\s*"([^"]*)".*?}',
+            current_template
+        )
+        # Check overall: if template has old status string vs live status
+        old_status_pattern = f'"hs_lead_status": "Active Client"'
+        if live_status == "CW" and old_status_pattern.replace("Active Client", "Active Client") in current_template:
+            pass  # will be caught by full regeneration
+
+    # Trigger regeneration if any contact's status doesn't match template
+    template_statuses = set(_re.findall(r'"hs_lead_status":\s*"([^"]+)"', current_template))
+    live_statuses = {(c["properties"].get("hs_lead_status") or "NEW") for c in contacts}
+    # If live has a status not in template or vice versa — regenerate
+    status_mismatch = bool(live_statuses - template_statuses) or bool(template_statuses - live_statuses - {"NEW"})
+    if status_mismatch:
+        log(f"  Status changes detected — regenerating template")
+        status_changed = True
+
+    result["changed"] = bool(added or removed or count_changed or status_changed)
 
     if not result["changed"]:
         log(f"  No changes detected — template is up to date ✅")
