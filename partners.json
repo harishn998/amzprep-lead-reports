@@ -1,0 +1,36 @@
+{
+  "partners": [
+    {
+      "partner_name": "EComm Architects",
+      "template_file": "Weekly Lead Report - EComm Architects.html",
+      "recipient_email": "ecommarchitect@amzprep.com",
+      "active": true
+    },
+    {
+      "partner_name": "Inspire Brands Group",
+      "template_file": "Weekly Lead Report - Inspire Brands Group.html",
+      "recipient_email": "inspiregroup@amzprep.com",
+      "active": true
+    }
+  ],
+  "notes": {
+    "adding_new_partner": [
+      "1. Add new partner block to the partners array above",
+      "2. Set active: true",
+      "3. Create the Design Manager template file in HubSpot",
+      "   (copy an existing template, update the partner name in the header)",
+      "4. Create a HubSpot workflow for the new partner",
+      "5. Create a Zapier Zap pointing to the new workflow",
+      "6. The GitHub Action will automatically handle the new partner",
+      "   on its next scheduled run — no code changes needed"
+    ],
+    "stage_ids": {
+      "13390264": "Closed Won",
+      "13390265": "Closed Lost",
+      "201513064": "Analysis",
+      "1247679147": "Negotiation",
+      "1271308871": "Deal Referred",
+      "1271308872": "Partner Won"
+    }
+  }
+}
