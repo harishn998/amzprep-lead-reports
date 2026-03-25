@@ -163,130 +163,139 @@ def fetch_deal_id(contact_id):
 
 # ── Template Generator ─────────────────────────────────────────────
 def get_next_monday_date():
-    """
-    Returns the upcoming Monday's date as a formatted string.
-    GitHub Actions runs Sunday 11PM so next Monday = tomorrow.
-    E.g. 'March 30, 2026'
-    """
+    """Returns the upcoming Monday date string e.g. 'March 30, 2026'"""
     from datetime import timedelta
     now_utc = datetime.now(timezone.utc)
     days_ahead = (0 - now_utc.weekday()) % 7
     if days_ahead == 0:
         days_ahead = 7
-    next_monday = now_utc + timedelta(days=days_ahead)
-    return next_monday.strftime("%B %d, %Y")
+    return (now_utc + timedelta(days=days_ahead)).strftime("%B %d, %Y")
 
 
 def generate_variable_block(partner_name, contacts, total_count):
     """
     Generate the HubL variable block (top section of template).
-    This is the ONLY section that gets replaced — everything from
-    the Stage label macro onwards is kept completely unchanged.
+    Uses hardcoded contact data + live crm_object calls for UNIQUE deals only.
+    Stays well under HubSpot's 10 crm_object() call limit per template.
     """
-    today    = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    today     = datetime.now(timezone.utc).strftime("%B %d, %Y")
     send_date = get_next_monday_date()
+
+    # Build unique deal map: deal_id -> hubl variable name
+    unique_deals = {}
+    for c in contacts:
+        did = c.get("deal_id")
+        if did and did not in unique_deals:
+            unique_deals[did] = f"_deal_{did}"
+
+    crm_calls = len(unique_deals)
+    log(f"  crm_object calls needed: {crm_calls} unique deals (limit=10)", "DEBUG")
+    if crm_calls > 10:
+        log(f"  WARNING: {crm_calls} crm_object calls exceeds HubSpot limit of 10!", "WARN")
+
     lines = []
 
-    # ── Comment block ──────────────────────────────────────────────
-    lines.append("<!--")
-    lines.append('  templateType: "email"')
-    lines.append('  isAvailableForNewContent: true')
-    lines.append("-->")
-    lines.append("{#")
-    lines.append("  =============================================================")
-    lines.append(f"  AMZ Prep — {partner_name} Weekly Lead Report")
-    lines.append("  HubSpot Coded Email Template")
-    lines.append(f"  AUTO-UPDATED by GitHub Actions on {today}")
-    lines.append("  Contacts (IDs only — all data fetched LIVE via crm_object):")
+    # ── Comment block ─────────────────────────────────────────────
+    lines += [
+        "<!--",
+        '  templateType: "email"',
+        '  isAvailableForNewContent: true',
+        "-->",
+        "{#",
+        "  =============================================================",
+        f"  AMZ Prep — {partner_name} Weekly Lead Report",
+        "  AUTO-UPDATED by GitHub Actions on " + today,
+        f"  crm_object calls: {crm_calls} unique deals (contact data hardcoded)",
+        "  Contacts:",
+    ]
     for c in contacts:
         cid  = c["id"]
-        name = c["properties"].get("firstname", "") or c["properties"].get("email","")
+        fn   = c["properties"].get("firstname", "") or c["properties"].get("email","")
         ln   = c["properties"].get("lastname", "") or ""
-        full = f"{name} {ln}".strip()
         did  = c.get("deal_id")
-        lines.append(f"    {full:<28} contact: {cid}  deal: {did or '—'}")
-    lines.append("  =============================================================")
-    lines.append("#}")
-    lines.append("")
+        lines.append(f"    {(fn+' '+ln).strip():<28} contact: {cid}  deal: {did or chr(8212)}")
+    lines += ["  =============================================================", "#}", ""]
 
-    # ── Live contact crm_object calls ──────────────────────────────
-    lines.append("{# ── ALL contact data fetched LIVE from HubSpot at send time ── #}")
+    # ── Hardcoded contact sets (avoids crm_object contact calls) ──
+    lines.append("{# ── Contact data hardcoded — GitHub Actions updates weekly ── #}")
     for i, c in enumerate(contacts, 1):
+        fn = (c["properties"].get("firstname") or "").replace('"', '\"')
+        ln = (c["properties"].get("lastname")  or "").replace('"', '\"')
+        em = (c["properties"].get("email")     or "").replace('"', '\"')
+        co = (c["properties"].get("company")   or "").replace('"', '\"')
+        st = (c["properties"].get("hs_lead_status") or "NEW").replace('"', '\"')
         lines.append(
-            f'{{% set c{i} = crm_object("contact", "{c["id"]}", '
-            f'"firstname,lastname,email,company,hs_lead_status") %}}'
+            '{%' + f' set c{i} = ' + '{"' + f'firstname": "{fn}", "lastname": "{ln}", ' +
+            f'"email": "{em}", "company": "{co}", "hs_lead_status": "{st}"' + '} %}'
         )
     lines.append("")
 
-    # ── Live deal crm_object calls ─────────────────────────────────
-    lines.append("{# ── Live deal data — null if contact has no deal ── #}")
+    # ── Live deal crm_object calls (unique deals only) ─────────────
+    lines.append("{# ── Live deal data — unique deal IDs only, fetched at send time ── #}")
+    for did, var in unique_deals.items():
+        lines.append(
+            '{%' + f' set {var} = crm_object("deal", "{did}", ' +
+            '"dealname,dealstage,amount,createdate,closedate") %}'
+        )
+    if not unique_deals:
+        lines.append("{# No active deals this period #}")
+    lines.append("")
+
+    # ── Assign deal variable per contact (reuse if shared deal) ───
+    lines.append("{# ── Assign deal per contact (null if no deal) ── #}")
     for i, c in enumerate(contacts, 1):
         did = c.get("deal_id")
-        if did:
-            lines.append(
-                f'{{% set d{i} = crm_object("deal", "{did}", '
-                f'"dealname,dealstage,amount,createdate,closedate") %}}'
-            )
-        else:
-            lines.append(f"{{% set d{i} = null %}}")
+        var = unique_deals.get(did, "null") if did else "null"
+        lines.append('{%' + f' set d{i} = {var} ' + '%}')
     lines.append("")
 
     # ── Normalised lead statuses ───────────────────────────────────
     lines.append("{# ── Normalised lead statuses ── #}")
     for i in range(1, len(contacts) + 1):
-        lines.append(f"{{% set s{i} = c{i}.hs_lead_status | lower %}}")
+        lines.append('{%' + f' set s{i} = c{i}.hs_lead_status | lower ' + '%}')
     lines.append("")
 
     # ── Counts ────────────────────────────────────────────────────
-    lines.append("{# ── Counts — rpt_total MUST equal the HubSpot API total ── #}")
-    lines.append(f"{{% set rpt_total = {total_count} %}}")
-    lines.append("")
-
-    # rpt_connected
-    lines.append("{% set rpt_connected = 0 %}")
+    lines += [
+        "{# ── Counts ── #}",
+        '{%' + f' set rpt_total = {total_count} ' + '%}',
+        "",
+        '{%' + " set rpt_connected = 0 " + "%}",
+    ]
     for i in range(1, len(contacts) + 1):
         lines.append(
-            f'{{% if s{i} == "connected" %}}'
-            f'{{% set rpt_connected = rpt_connected + 1 %}}'
-            f'{{% endif %}}'
+            '{%' + f' if s{i} == "connected" ' + '%}' +
+            '{%' + ' set rpt_connected = rpt_connected + 1 ' + '%}' +
+            '{%' + ' endif ' + '%}'
         )
-    lines.append("")
 
-    # rpt_active_deals — only for contacts WITH a deal
-    lines.append("{# open = deal that is NOT closed won/lost #}")
-    lines.append("{% set rpt_active_deals = 0 %}")
+    lines += ["", "{# open = deal NOT closed #}", '{%' + " set rpt_active_deals = 0 " + "%}"]
     for i, c in enumerate(contacts, 1):
         if c.get("deal_id"):
             lines.append(
-                f'{{% if d{i}.dealstage and d{i}.dealstage != "13390264" '
-                f'and d{i}.dealstage != "13390265" '
-                f'and d{i}.dealstage != "closedwon" '
-                f'and d{i}.dealstage != "closedlost" %}}'
-                f'{{% set rpt_active_deals = rpt_active_deals + 1 %}}'
-                f'{{% endif %}}'
+                '{%' + f' if d{i} and d{i}.dealstage and d{i}.dealstage != "13390264" ' +
+                f'and d{i}.dealstage != "13390265" and d{i}.dealstage != "closedwon" ' +
+                f'and d{i}.dealstage != "closedlost" ' + '%}' +
+                '{%' + ' set rpt_active_deals = rpt_active_deals + 1 ' + '%}' +
+                '{%' + ' endif ' + '%}'
             )
-    lines.append("")
 
-    # rpt_won — only for contacts WITH a deal
-    lines.append("{# closed won = stage 13390264 or 1271308872 (Partner Won) #}")
-    lines.append("{% set rpt_won = 0 %}")
+    lines += ["", "{# closed won #}", '{%' + " set rpt_won = 0 " + "%}"]
     for i, c in enumerate(contacts, 1):
         if c.get("deal_id"):
             lines.append(
-                f'{{% if d{i}.dealstage == "13390264" '
-                f'or d{i}.dealstage == "closedwon" '
-                f'or d{i}.dealstage == "1271308872" %}}'
-                f'{{% set rpt_won = rpt_won + 1 %}}'
-                f'{{% endif %}}'
+                '{%' + f' if d{i} and (d{i}.dealstage == "13390264" ' +
+                f'or d{i}.dealstage == "closedwon" or d{i}.dealstage == "1271308872") ' + '%}' +
+                '{%' + ' set rpt_won = rpt_won + 1 ' + '%}' +
+                '{%' + ' endif ' + '%}'
             )
-    lines.append("")
 
-    # report_date — hardcoded by GitHub Actions, shows in header
-    lines.append(f'{{% set report_date = "{send_date}" %}}')
-    lines.append("")
-
-    # pairs array
-    lines.append("{% set pairs = [")
+    lines += [
+        "",
+        '{%' + f' set report_date = "{send_date}" ' + '%}',
+        "",
+        '{%' + ' set pairs = [',
+    ]
     for i in range(1, len(contacts) + 1):
         comma = "," if i < len(contacts) else ""
         lines.append(f"  [c{i}, d{i}, s{i}]{comma}")
@@ -350,23 +359,33 @@ def write_template(filename, content):
 
 
 def publish_templates(filenames):
-    """Push all updated templates from draft to live."""
+    """Push updated templates from draft to live, one file at a time."""
     if DRY_RUN:
         log(f"DRY RUN — would publish {len(filenames)} files to live", "WARN")
         return True
 
-    status, resp = hs_request(
-        "POST",
-        "/cms/v3/source-code/draft/push-to-live",
-        body={"filePaths": filenames}
-    )
-
-    if status in (200, 202, 204):
-        log(f"Published {len(filenames)} template(s) to live ✅")
-        return True
-    else:
-        log(f"Publish to live failed: HTTP {status} — {resp}", "ERROR")
-        return False
+    all_ok = True
+    for filename in filenames:
+        encoded = urllib.parse.quote(filename)
+        status, resp = hs_request(
+            "POST",
+            f"/cms/v3/source-code/draft/push-to-live/{encoded}"
+        )
+        if status in (200, 202, 204):
+            log(f"Published to live: '{filename}' ✅")
+        else:
+            # Fallback: try alternate endpoint format
+            status2, resp2 = hs_request(
+                "POST",
+                f"/cms/v3/source-code/{encoded}/push-to-live"
+            )
+            if status2 in (200, 202, 204):
+                log(f"Published to live: '{filename}' ✅")
+            else:
+                log(f"Publish failed for '{filename}': HTTP {status}/{status2}", "ERROR")
+                all_ok = False
+        time.sleep(0.3)
+    return all_ok
 
 
 # ── Contact ID Extractor ───────────────────────────────────────────
