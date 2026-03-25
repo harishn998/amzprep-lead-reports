@@ -17,6 +17,12 @@
       "template_file": "Weekly Lead Report - Emplicit.html",
       "recipient_email": "emplicit@amzprep.com",
       "active": true
+    },
+    {
+      "partner_name": "Walmart",
+      "template_file": "Weekly Lead Report - Walmart.html",
+      "recipient_email": "walmart@amzprep.com",
+      "active": true
     }
   ],
   "notes": {
