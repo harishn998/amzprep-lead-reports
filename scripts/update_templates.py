@@ -372,13 +372,13 @@ def write_template(filename, content):
     # Write directly to live — no push-to-live step needed
     status, resp = hs_request(
         "PUT",
-        f"/cms/v3/source-code/live/content/{encoded}",
+        f"/cms/v3/source-code/published/content/{encoded}",
         body=content,
         is_multipart=True
     )
 
     if status in (200, 201):
-        log(f"Template written to live: '{filename}' ✅")
+        log(f"Template written to published: '{filename}' ✅")
         return True
     else:
         log(f"Failed to write template '{filename}': HTTP {status}", "ERROR")
