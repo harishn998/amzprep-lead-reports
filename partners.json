@@ -11,6 +11,12 @@
       "template_file": "Weekly Lead Report - Inspire Brands Group.html",
       "recipient_email": "inspiregroup@amzprep.com",
       "active": true
+    },
+    {
+      "partner_name": "Emplicit",
+      "template_file": "Weekly Lead Report - Emplicit.html",
+      "recipient_email": "emplicit@amzprep.com",
+      "active": true
     }
   ],
   "notes": {
