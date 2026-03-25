@@ -162,13 +162,29 @@ def fetch_deal_id(contact_id):
 
 
 # ── Template Generator ─────────────────────────────────────────────
+def get_next_monday_date():
+    """
+    Returns the upcoming Monday's date as a formatted string.
+    GitHub Actions runs Sunday 11PM so next Monday = tomorrow.
+    E.g. 'March 30, 2026'
+    """
+    from datetime import timedelta
+    now_utc = datetime.now(timezone.utc)
+    days_ahead = (0 - now_utc.weekday()) % 7
+    if days_ahead == 0:
+        days_ahead = 7
+    next_monday = now_utc + timedelta(days=days_ahead)
+    return next_monday.strftime("%B %d, %Y")
+
+
 def generate_variable_block(partner_name, contacts, total_count):
     """
     Generate the HubL variable block (top section of template).
     This is the ONLY section that gets replaced — everything from
     the Stage label macro onwards is kept completely unchanged.
     """
-    today = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    today    = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    send_date = get_next_monday_date()
     lines = []
 
     # ── Comment block ──────────────────────────────────────────────
@@ -263,6 +279,10 @@ def generate_variable_block(partner_name, contacts, total_count):
                 f'{{% set rpt_won = rpt_won + 1 %}}'
                 f'{{% endif %}}'
             )
+    lines.append("")
+
+    # report_date — hardcoded by GitHub Actions, shows in header
+    lines.append(f'{{% set report_date = "{send_date}" %}}')
     lines.append("")
 
     # pairs array
