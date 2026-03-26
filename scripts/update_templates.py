@@ -271,20 +271,24 @@ def generate_variable_block(partner_name, contacts, total_count):
         lines.append("    " + (fn + " " + ln).strip().ljust(28) + "  contact: " + c["id"] + "  deal: " + str(did) + " [" + cls + "]")
     lines += ["  =============================================================", "#}", ""]
 
-    # Hardcoded contact data — FLAT VARIABLES (HubSpot HubL does not support dict literals)
-    # Pattern: c{i}_fn, c{i}_ln, c{i}_em, c{i}_co, c{i}_st
-    lines.append("{# ── Contact data hardcoded as flat vars — GitHub Actions updates weekly ── #}")
+    # Hardcoded contact data as HubL dicts — accessed via c.firstname, c.company etc.
+    lines.append("{# \u2500\u2500 Contact data hardcoded \u2014 GitHub Actions updates weekly \u2500\u2500 #}")
     for i, c in enumerate(contacts, 1):
         fn = (c["properties"].get("firstname") or "").replace('"', '\\"')
         ln = (c["properties"].get("lastname")  or "").replace('"', '\\"')
         em = (c["properties"].get("email")     or "").replace('"', '\\"')
         co = (c["properties"].get("company")   or "").replace('"', '\\"')
         st = (c["properties"].get("hs_lead_status") or "NEW").replace('"', '\\"')
-        lines.append('{% set c' + str(i) + '_fn = "' + fn + '" %}')
-        lines.append('{% set c' + str(i) + '_ln = "' + ln + '" %}')
-        lines.append('{% set c' + str(i) + '_em = "' + em + '" %}')
-        lines.append('{% set c' + str(i) + '_co = "' + co + '" %}')
-        lines.append('{% set c' + str(i) + '_st = "' + st + '" %}')
+        # Build the dict literal cleanly — no HS/HE tricks that cause double-quote bugs
+        lines.append(
+            "{% set c" + str(i) + " = {"
+            + '"firstname": "' + fn + '", '
+            + '"lastname": "' + ln + '", '
+            + '"email": "' + em + '", '
+            + '"company": "' + co + '", '
+            + '"hs_lead_status": "' + st + '"'
+            + "} %}"
+        )
     lines.append("")
 
     # Live deal crm_object calls
@@ -331,9 +335,14 @@ def generate_variable_block(partner_name, contacts, total_count):
         "",
         "{% set pairs = [",
     ]
-    for i in range(1, len(contacts) + 1):
+    for i, c in enumerate(contacts, 1):
         comma = "," if i < len(contacts) else ""
-        lines.append("  [c" + str(i) + ", d" + str(i) + ", s" + str(i) + ", show_deal" + str(i) + ", show_won" + str(i) + "]" + comma)
+        won_name = won_deal_names.get(c["id"], "").replace('"', '\\"').strip()
+        lines.append(
+            "  [c" + str(i) + ", d" + str(i) + ", s" + str(i) +
+            ", show_deal" + str(i) + ", show_won" + str(i) +
+            ', "' + won_name + '"]' + comma
+        )
     lines += ["] %}", ""]
 
     return "\n".join(lines)
@@ -403,13 +412,21 @@ def publish_templates(filenames):
 # ── Contact ID Extractor ───────────────────────────────────────────
 def extract_contact_ids_from_template(template_content):
     """
-    Extract existing contact IDs from the current template.
-    Looks for: crm_object("contact", "ID",
-    Returns a set of ID strings.
+    Extract contact IDs from template. Supports all formats:
+    - crm_object("contact", "ID")  — old live format
+    - set c1 = {"firstname": ...}  — new hardcoded dict format (IDs in comment block)
+    - contact: 12345               — comment block format
     """
     import re
-    pattern = r'crm_object\("contact",\s*"(\d+)"'
-    return set(re.findall(pattern, template_content))
+    ids = set()
+    # Old crm_object format
+    ids |= set(re.findall(r'crm_object\("contact",\s*"(\d+)"', template_content))
+    # Comment block: "contact: 12345678"
+    ids |= set(re.findall(r'contact:\s*(\d{8,})', template_content))
+    # New comment block: long number followed by spaces and deal ID or status
+    # Matches lines like: "  Lisa Diep     22772675  52994241921   amzdealwon [won]"
+    ids |= set(re.findall(r'^\s+\S[^\n]+?\s+(\d{8,})\s+(?:\d{8,}|—)', template_content, re.MULTILINE))
+    return ids
 
 
 # ── Main Orchestrator ──────────────────────────────────────────────
