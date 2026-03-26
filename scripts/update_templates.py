@@ -58,14 +58,18 @@ def hs_request(method, path, body=None, is_multipart=False):
 
     if is_multipart:
         # multipart/form-data for CMS PUT file upload
+        # IMPORTANT: use string concatenation NOT f-strings here.
+        # The template body contains {%...%} and {{...}} HubL tags —
+        # putting `body` inside an f-string would try to evaluate those
+        # as Python format expressions and corrupt the payload.
         boundary = "----FormBoundary7MA4YWxkTrZu0gW"
-        headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+        headers["Content-Type"] = "multipart/form-data; boundary=" + boundary
         data = (
-            f"--{boundary}\r\n"
-            f"Content-Disposition: form-data; name=\"file\"; filename=\"template.html\"\r\n"
-            f"Content-Type: text/html\r\n\r\n"
-            f"{body}"
-            f"\r\n--{boundary}--\r\n"
+            "--" + boundary + "\r\n"
+            "Content-Disposition: form-data; name=\"file\"; filename=\"template.html\"\r\n"
+            "Content-Type: text/html\r\n\r\n"
+            + body +
+            "\r\n--" + boundary + "--\r\n"
         ).encode("utf-8")
     elif body is not None:
         headers["Content-Type"] = "application/json"
@@ -267,22 +271,20 @@ def generate_variable_block(partner_name, contacts, total_count):
         lines.append("    " + (fn + " " + ln).strip().ljust(28) + "  contact: " + c["id"] + "  deal: " + str(did) + " [" + cls + "]")
     lines += ["  =============================================================", "#}", ""]
 
-    # Hardcoded contact sets
-    lines.append("{# \u2500\u2500 Contact data hardcoded \u2014 GitHub Actions updates weekly \u2500\u2500 #}")
-    HS  = '{"'
-    HE  = '"}'
+    # Hardcoded contact data — FLAT VARIABLES (HubSpot HubL does not support dict literals)
+    # Pattern: c{i}_fn, c{i}_ln, c{i}_em, c{i}_co, c{i}_st
+    lines.append("{# ── Contact data hardcoded as flat vars — GitHub Actions updates weekly ── #}")
     for i, c in enumerate(contacts, 1):
         fn = (c["properties"].get("firstname") or "").replace('"', '\\"')
         ln = (c["properties"].get("lastname")  or "").replace('"', '\\"')
         em = (c["properties"].get("email")     or "").replace('"', '\\"')
         co = (c["properties"].get("company")   or "").replace('"', '\\"')
         st = (c["properties"].get("hs_lead_status") or "NEW").replace('"', '\\"')
-        lines.append(
-            "{% set c" + str(i) + " = " + HS +
-            'firstname": "' + fn + '", "lastname": "' + ln + '", ' +
-            '"email": "' + em + '", "company": "' + co + '", "hs_lead_status": "' + st + '"' +
-            HE + " %}"
-        )
+        lines.append('{% set c' + str(i) + '_fn = "' + fn + '" %}')
+        lines.append('{% set c' + str(i) + '_ln = "' + ln + '" %}')
+        lines.append('{% set c' + str(i) + '_em = "' + em + '" %}')
+        lines.append('{% set c' + str(i) + '_co = "' + co + '" %}')
+        lines.append('{% set c' + str(i) + '_st = "' + st + '" %}')
     lines.append("")
 
     # Live deal crm_object calls
