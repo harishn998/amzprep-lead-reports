@@ -323,6 +323,15 @@ def generate_variable_block(partner_name, contacts, total_count):
         lines.append("{% set show_won"  + str(i) + " = " + ("true" if sw else "false") + " %}")
     lines.append("")
 
+    # Build won deal name lookup — fetch deal names for won contacts with deals
+    won_deal_names = {}
+    for c, cls, sw in zip(contacts, classified, show_won_flags):
+        if sw and c.get("deal_id") and cls == "won":
+            ds_status, ds_resp = hs_request("GET", "/crm/v3/objects/deals/" + c["deal_id"] + "?properties=dealname")
+            if ds_status == 200:
+                won_deal_names[c["id"]] = (ds_resp.get("properties", {}).get("dealname") or "").strip()
+            time.sleep(0.1)
+
     # Hardcoded counts
     lines += [
         "{# \u2500\u2500 Counts \u2500\u2500 #}",
