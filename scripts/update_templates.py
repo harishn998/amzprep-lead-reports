@@ -162,6 +162,19 @@ def fetch_deal_id(contact_id):
 
 
 # ── Template Generator ─────────────────────────────────────────────
+CLOSED_WON_STAGES  = {"13390264", "closedwon", "1271308872"}
+CLOSED_LOST_STAGES = {"13390265", "closedlost"}
+CHURN_STATUSES     = {"churned customer", "churned"}
+WON_CONTACT_STATUS = {"cw", "amzdealwon", "customer"}
+
+def classify_deal(stage):
+    """Returns 'active', 'won', 'lost', or 'none'"""
+    if stage in CLOSED_WON_STAGES:  return "won"
+    if stage in CLOSED_LOST_STAGES: return "lost"
+    if stage: return "active"
+    return "none"
+
+
 def get_next_monday_date():
     """Returns the upcoming Monday date string e.g. 'March 30, 2026'"""
     from datetime import timedelta
@@ -174,160 +187,154 @@ def get_next_monday_date():
 
 def generate_variable_block(partner_name, contacts, total_count):
     """
-    Generate the HubL variable block (top section of template).
-    Uses hardcoded contact data + live crm_object calls for UNIQUE deals only.
-    Stays well under HubSpot's 10 crm_object() call limit per template.
+    Production-ready HubL variable block generator.
+    Hardcodes contact data, uses crm_object only for ACTIVE deals,
+    includes show_deal/show_won dedup flags in pairs array.
     """
-    today     = datetime.now(timezone.utc).strftime("%B %d, %Y")
     send_date = get_next_monday_date()
+    today     = datetime.now(timezone.utc).strftime("%B %d, %Y")
 
-    # Build unique deal map — ACTIVE deals only (skip closed won/lost)
-    # Closed deals don't change stage so no need for live crm_object calls
-    # This keeps us under HubSpot's 10 crm_object() limit per template
-    SKIP_CLOSED = True  # Set False to include all deals (may exceed limit)
-    unique_deals = {}
+    # Fetch deal stages for contacts that have deals
     for c in contacts:
         did = c.get("deal_id")
-        if did and did not in unique_deals:
-            unique_deals[did] = f"_deal_{did}"
-
-    if SKIP_CLOSED and len(unique_deals) > 10:
-        # Too many — fetch deal stages to filter out closed ones
-        log(f"  {len(unique_deals)} deals found — filtering to active only to stay under limit", "DEBUG")
-        active_deals = {}
-        for did, var in unique_deals.items():
-            ds_status, ds_resp = hs_request("GET", f"/crm/v3/objects/deals/{did}?properties=dealstage")
-            if ds_status == 200:
-                stage = ds_resp.get("properties", {}).get("dealstage", "")
-                if stage not in {"13390264","13390265","closedwon","closedlost","1271308873","1037017710","1037017711"}:
-                    active_deals[did] = var
-                    log(f"  Keeping active deal {did} (stage: {stage})", "DEBUG")
-                else:
-                    log(f"  Skipping closed deal {did} (stage: {stage})", "DEBUG")
+        if did and "deal_stage" not in c:
+            ds_status, ds_resp = hs_request("GET", "/crm/v3/objects/deals/" + did + "?properties=dealstage")
+            c["deal_stage"] = ds_resp.get("properties", {}).get("dealstage", "") if ds_status == 200 else ""
             time.sleep(0.1)
-        unique_deals = active_deals
+        elif not did:
+            c["deal_stage"] = ""
 
-    crm_calls = len(unique_deals)
-    log(f"  crm_object calls needed: {crm_calls} active deals (limit=10)", "DEBUG")
+    # Classify each contact's deal
+    classified = [classify_deal(c.get("deal_stage", "")) for c in contacts]
+
+    # Build unique ACTIVE deal map (crm_object only for active deals)
+    unique_active_deals = {}
+    for c, cls in zip(contacts, classified):
+        did = c.get("deal_id")
+        if did and cls == "active" and did not in unique_active_deals:
+            unique_active_deals[did] = "_deal_" + did
+
+    # show_deal flags (first occurrence of each active deal)
+    seen_deal_ids = set()
+    show_deal_flags = []
+    for c, cls in zip(contacts, classified):
+        did = c.get("deal_id")
+        if did and cls == "active" and did not in seen_deal_ids:
+            show_deal_flags.append(True)
+            seen_deal_ids.add(did)
+        else:
+            show_deal_flags.append(False)
+
+    # show_won flags (won by status or deal stage, excluding churned)
+    seen_won_keys = set()
+    show_won_flags = []
+    for c, cls in zip(contacts, classified):
+        did = c.get("deal_id")
+        st  = (c["properties"].get("hs_lead_status") or "").lower()
+        is_won = (st in WON_CONTACT_STATUS or cls == "won") and st not in CHURN_STATUSES
+        won_key = did if (did and cls == "won") else c["id"]
+        if is_won and won_key not in seen_won_keys:
+            show_won_flags.append(True)
+            seen_won_keys.add(won_key)
+        else:
+            show_won_flags.append(False)
+
+    # Hardcoded counts from live data
+    rpt_connected    = sum(1 for c in contacts if (c["properties"].get("hs_lead_status") or "").lower() == "connected")
+    rpt_active_deals = len(seen_deal_ids)
+    rpt_won          = sum(show_won_flags)
+    crm_calls        = len(unique_active_deals)
+    log("  crm_object calls: " + str(crm_calls) + " | active_deals=" + str(rpt_active_deals) + " | won=" + str(rpt_won), "DEBUG")
     if crm_calls > 10:
-        log(f"  WARNING: {crm_calls} still exceeds 10 — will trigger HubSpot error", "WARN")
+        log("  WARNING: " + str(crm_calls) + " crm_object calls exceeds HubSpot limit of 10!", "WARN")
 
-    crm_calls = len(unique_deals)
-    log(f"  crm_object calls needed: {crm_calls} unique deals (limit=10)", "DEBUG")
-    if crm_calls > 10:
-        log(f"  WARNING: {crm_calls} crm_object calls exceeds HubSpot limit of 10!", "WARN")
-
-    lines = []
-
-    # ── Comment block ─────────────────────────────────────────────
-    lines += [
+    lines = [
         "<!--",
         '  templateType: "email"',
         '  isAvailableForNewContent: true',
         "-->",
         "{#",
         "  =============================================================",
-        f"  AMZ Prep — {partner_name} Weekly Lead Report",
+        "  AMZ Prep \u2014 " + partner_name + " Weekly Lead Report",
         "  AUTO-UPDATED by GitHub Actions on " + today,
-        f"  crm_object calls: {crm_calls} unique deals (contact data hardcoded)",
+        "  crm_object: " + str(crm_calls) + " | ActiveDeals=" + str(rpt_active_deals) + " | Won=" + str(rpt_won),
         "  Contacts:",
     ]
-    for c in contacts:
-        cid  = c["id"]
-        fn   = c["properties"].get("firstname", "") or c["properties"].get("email","")
-        ln   = c["properties"].get("lastname", "") or ""
-        did  = c.get("deal_id")
-        lines.append(f"    {(fn+' '+ln).strip():<28} contact: {cid}  deal: {did or chr(8212)}")
+    for c, cls in zip(contacts, classified):
+        fn  = c["properties"].get("firstname", "") or c["properties"].get("email", "")
+        ln  = c["properties"].get("lastname",  "") or ""
+        did = c.get("deal_id") or "\u2014"
+        lines.append("    " + (fn + " " + ln).strip().ljust(28) + "  contact: " + c["id"] + "  deal: " + str(did) + " [" + cls + "]")
     lines += ["  =============================================================", "#}", ""]
 
-    # ── Hardcoded contact sets (avoids crm_object contact calls) ──
-    lines.append("{# ── Contact data hardcoded — GitHub Actions updates weekly ── #}")
+    # Hardcoded contact sets
+    lines.append("{# \u2500\u2500 Contact data hardcoded \u2014 GitHub Actions updates weekly \u2500\u2500 #}")
+    HS  = '{"'
+    HE  = '"}'
     for i, c in enumerate(contacts, 1):
-        fn = (c["properties"].get("firstname") or "").replace('"', '\"')
-        ln = (c["properties"].get("lastname")  or "").replace('"', '\"')
-        em = (c["properties"].get("email")     or "").replace('"', '\"')
-        co = (c["properties"].get("company")   or "").replace('"', '\"')
-        st = (c["properties"].get("hs_lead_status") or "NEW").replace('"', '\"')
+        fn = (c["properties"].get("firstname") or "").replace('"', '\\"')
+        ln = (c["properties"].get("lastname")  or "").replace('"', '\\"')
+        em = (c["properties"].get("email")     or "").replace('"', '\\"')
+        co = (c["properties"].get("company")   or "").replace('"', '\\"')
+        st = (c["properties"].get("hs_lead_status") or "NEW").replace('"', '\\"')
         lines.append(
-            '{%' + f' set c{i} = ' + '{"' + f'firstname": "{fn}", "lastname": "{ln}", ' +
-            f'"email": "{em}", "company": "{co}", "hs_lead_status": "{st}"' + '} %}'
+            "{% set c" + str(i) + " = " + HS +
+            'firstname": "' + fn + '", "lastname": "' + ln + '", ' +
+            '"email": "' + em + '", "company": "' + co + '", "hs_lead_status": "' + st + '"' +
+            HE + " %}"
         )
     lines.append("")
 
-    # ── Live deal crm_object calls (unique deals only) ─────────────
-    lines.append("{# ── Live deal data — unique deal IDs only, fetched at send time ── #}")
-    for did, var in unique_deals.items():
+    # Live deal crm_object calls
+    lines.append("{# \u2500\u2500 Live deal data \u2014 active deals only, fetched at send time \u2500\u2500 #}")
+    for did, var in unique_active_deals.items():
         lines.append(
-            '{%' + f' set {var} = crm_object("deal", "{did}", ' +
+            '{% set ' + var + ' = crm_object("deal", "' + did + '", ' +
             '"dealname,dealstage,amount,createdate,closedate") %}'
         )
-    if not unique_deals:
+    if not unique_active_deals:
         lines.append("{# No active deals this period #}")
     lines.append("")
 
-    # ── Assign deal variable per contact (reuse if shared deal) ───
-    lines.append("{# ── Assign deal per contact (null if no deal) ── #}")
-    for i, c in enumerate(contacts, 1):
+    # Assign deal per contact
+    lines.append("{# \u2500\u2500 Assign deal per contact (null if closed/no deal) \u2500\u2500 #}")
+    for i, (c, cls) in enumerate(zip(contacts, classified), 1):
         did = c.get("deal_id")
-        var = unique_deals.get(did, "null") if did else "null"
-        lines.append('{%' + f' set d{i} = {var} ' + '%}')
+        var = unique_active_deals.get(did, "null") if (did and cls == "active") else "null"
+        lines.append("{% set d" + str(i) + " = " + var + " %}")
     lines.append("")
 
-    # ── Normalised lead statuses ───────────────────────────────────
-    lines.append("{# ── Normalised lead statuses ── #}")
+    # Normalised statuses
+    lines.append("{# \u2500\u2500 Normalised lead statuses \u2500\u2500 #}")
     for i in range(1, len(contacts) + 1):
-        lines.append('{%' + f' set s{i} = c{i}.hs_lead_status | lower ' + '%}')
+        lines.append("{% set s" + str(i) + " = c" + str(i) + ".hs_lead_status | lower %}")
     lines.append("")
 
-    # ── Counts ────────────────────────────────────────────────────
+    # Dedup flags
+    lines.append("{# \u2500\u2500 Dedup: show_deal=first active deal; show_won=first won contact \u2500\u2500 #}")
+    for i, (sd, sw) in enumerate(zip(show_deal_flags, show_won_flags), 1):
+        lines.append("{% set show_deal" + str(i) + " = " + ("true" if sd else "false") + " %}")
+        lines.append("{% set show_won"  + str(i) + " = " + ("true" if sw else "false") + " %}")
+    lines.append("")
+
+    # Hardcoded counts
     lines += [
-        "{# ── Counts ── #}",
-        '{%' + f' set rpt_total = {total_count} ' + '%}',
+        "{# \u2500\u2500 Counts \u2500\u2500 #}",
+        "{% set rpt_total = "        + str(total_count)    + " %}",
+        "{% set rpt_connected = "    + str(rpt_connected)   + " %}",
+        "{% set rpt_active_deals = " + str(rpt_active_deals)+ " %}",
+        "{% set rpt_won = "          + str(rpt_won)         + " %}",
         "",
-        '{%' + " set rpt_connected = 0 " + "%}",
-    ]
-    for i in range(1, len(contacts) + 1):
-        lines.append(
-            '{%' + f' if s{i} == "connected" ' + '%}' +
-            '{%' + ' set rpt_connected = rpt_connected + 1 ' + '%}' +
-            '{%' + ' endif ' + '%}'
-        )
-
-    lines += ["", "{# open = deal NOT closed #}", '{%' + " set rpt_active_deals = 0 " + "%}"]
-    for i, c in enumerate(contacts, 1):
-        if c.get("deal_id"):
-            lines.append(
-                '{%' + f' if d{i} and d{i}.dealstage and d{i}.dealstage != "13390264" ' +
-                f'and d{i}.dealstage != "13390265" and d{i}.dealstage != "closedwon" ' +
-                f'and d{i}.dealstage != "closedlost" ' + '%}' +
-                '{%' + ' set rpt_active_deals = rpt_active_deals + 1 ' + '%}' +
-                '{%' + ' endif ' + '%}'
-            )
-
-    lines += ["", "{# closed won #}", '{%' + " set rpt_won = 0 " + "%}"]
-    for i, c in enumerate(contacts, 1):
-        if c.get("deal_id"):
-            lines.append(
-                '{%' + f' if d{i} and (d{i}.dealstage == "13390264" ' +
-                f'or d{i}.dealstage == "closedwon" or d{i}.dealstage == "1271308872") ' + '%}' +
-                '{%' + ' set rpt_won = rpt_won + 1 ' + '%}' +
-                '{%' + ' endif ' + '%}'
-            )
-
-    lines += [
+        '{% set report_date = "' + send_date + '" %}',
         "",
-        '{%' + f' set report_date = "{send_date}" ' + '%}',
-        "",
-        '{%' + ' set pairs = [',
+        "{% set pairs = [",
     ]
     for i in range(1, len(contacts) + 1):
         comma = "," if i < len(contacts) else ""
-        lines.append(f"  [c{i}, d{i}, s{i}]{comma}")
-    lines.append("] %}")
-    lines.append("")
+        lines.append("  [c" + str(i) + ", d" + str(i) + ", s" + str(i) + ", show_deal" + str(i) + ", show_won" + str(i) + "]" + comma)
+    lines += ["] %}", ""]
 
     return "\n".join(lines)
-
 
 def regenerate_template(current_template, partner_name, contacts, total_count):
     """
