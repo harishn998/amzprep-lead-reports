@@ -323,14 +323,27 @@ def generate_variable_block(partner_name, contacts, total_count):
         lines.append("{% set show_won"  + str(i) + " = " + ("true" if sw else "false") + " %}")
     lines.append("")
 
-    # Build won deal name lookup — fetch deal names for won contacts with deals
+    # Build won deal name lookup:
+    # - If won contact has an active deal with a name → use deal name
+    # - If won contact has no deal (e.g. CW status only) → use full contact name
+    #   (avoids HubSpot HubL dict access quirks when reading c.firstname from pair[0])
     won_deal_names = {}
     for c, cls, sw in zip(contacts, classified, show_won_flags):
-        if sw and c.get("deal_id") and cls == "won":
-            ds_status, ds_resp = hs_request("GET", "/crm/v3/objects/deals/" + c["deal_id"] + "?properties=dealname")
-            if ds_status == 200:
-                won_deal_names[c["id"]] = (ds_resp.get("properties", {}).get("dealname") or "").strip()
-            time.sleep(0.1)
+        if sw:
+            fn = (c["properties"].get("firstname") or "").strip()
+            ln = (c["properties"].get("lastname")  or "").strip()
+            full_name = (fn + " " + ln).strip() or (c["properties"].get("email") or "")
+            if c.get("deal_id") and cls == "won":
+                ds_status, ds_resp = hs_request("GET", "/crm/v3/objects/deals/" + c["deal_id"] + "?properties=dealname")
+                if ds_status == 200:
+                    deal_name = (ds_resp.get("properties", {}).get("dealname") or "").strip()
+                    won_deal_names[c["id"]] = deal_name if deal_name else full_name
+                else:
+                    won_deal_names[c["id"]] = full_name
+                time.sleep(0.1)
+            else:
+                # No active deal — use contact name as the identifier
+                won_deal_names[c["id"]] = full_name
 
     # Hardcoded counts
     lines += [
@@ -381,9 +394,29 @@ def regenerate_template(current_template, partner_name, contacts, total_count):
     CORRECT_T3_DEALNAME = '{{ d.dealname if d.dealname else "\u2014" }}'
 
     if WRONG_T3_DEALNAME in preserved_section:
-        # Fix ONLY the first occurrence (Table 3) — Table 4 keeps pair[5] logic
         preserved_section = preserved_section.replace(WRONG_T3_DEALNAME, CORRECT_T3_DEALNAME, 1)
-        log("  Auto-corrected Table 3 Deal Name cell (was using contact name fallback)", "DEBUG")
+        log("  Auto-corrected Table 3 Deal Name cell", "DEBUG")
+
+    # Auto-correct Closed Won table to use pair[5]/pair[6] without dict access
+    WRONG_WON_NAME = (
+        '{% if pair[5] %}{{ pair[5] }}{% elif c.firstname or c.lastname %}'
+        '{{ c.firstname }} {{ c.lastname }}{% else %}{{ c.email }}{% endif %}'
+    )
+    CORRECT_WON_NAME = '{{ pair[5] if pair[5] else c.email }}'
+    if WRONG_WON_NAME in preserved_section:
+        preserved_section = preserved_section.replace(WRONG_WON_NAME, CORRECT_WON_NAME)
+        log("  Auto-corrected Closed Won name cell", "DEBUG")
+
+    # Auto-correct Closed Won company cell to use pair[6]
+    WRONG_WON_CO = '{{ c.company if c.company else "\u2014" }}'
+    CORRECT_WON_CO = '{{ pair[6] if pair[6] else "\u2014" }}'
+    # Only in won table context (after pair[4])
+    if 'pair[4]' in preserved_section and WRONG_WON_CO in preserved_section:
+        # Replace last occurrence of company cell (in won table)
+        last_idx = preserved_section.rfind(WRONG_WON_CO)
+        if last_idx > 0:
+            preserved_section = preserved_section[:last_idx] + CORRECT_WON_CO + preserved_section[last_idx+len(WRONG_WON_CO):]
+            log("  Auto-corrected Closed Won company cell", "DEBUG")
 
     new_block = generate_variable_block(partner_name, contacts, total_count)
     return new_block + preserved_section
