@@ -359,7 +359,8 @@ def generate_variable_block(partner_name, contacts, total_count):
 def regenerate_template(current_template, partner_name, contacts, total_count):
     """
     Replace ONLY the variable block at the top of the template.
-    Everything from the Stage label macro onwards is kept VERBATIM.
+    Everything from the Stage label macro onwards is kept VERBATIM,
+    with one exception: Table 3 Deal Name cell is auto-corrected if wrong.
     """
     split_marker = "{# ── Stage label macro"
     idx = current_template.find(split_marker)
@@ -369,6 +370,21 @@ def regenerate_template(current_template, partner_name, contacts, total_count):
         return None
 
     preserved_section = current_template[idx:]
+
+    # ── Auto-correct Table 3 Deal Name cell ────────────────────────────────
+    # Table 3 (Deal Status) must show d.dealname — never the pair[5]/contact fallback.
+    # pair[5] is for Table 4 (Closed Won) only where d is null.
+    WRONG_T3_DEALNAME = (
+        '{% if pair[5] %}{{ pair[5] }}{% elif c.firstname or c.lastname %}'
+        '{{ c.firstname }} {{ c.lastname }}{% else %}{{ c.email }}{% endif %}'
+    )
+    CORRECT_T3_DEALNAME = '{{ d.dealname if d.dealname else "\u2014" }}'
+
+    if WRONG_T3_DEALNAME in preserved_section:
+        # Fix ONLY the first occurrence (Table 3) — Table 4 keeps pair[5] logic
+        preserved_section = preserved_section.replace(WRONG_T3_DEALNAME, CORRECT_T3_DEALNAME, 1)
+        log("  Auto-corrected Table 3 Deal Name cell (was using contact name fallback)", "DEBUG")
+
     new_block = generate_variable_block(partner_name, contacts, total_count)
     return new_block + preserved_section
 
