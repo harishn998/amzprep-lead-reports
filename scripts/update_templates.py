@@ -218,12 +218,31 @@ def generate_variable_block(partner_name, contacts, total_count):
         if did and cls == "active" and did not in unique_active_deals:
             unique_active_deals[did] = "_deal_" + did
 
-    # show_deal flags (first occurrence of each active deal)
+    # show_deal flags (first NON-churned/won occurrence of each active deal)
+    # Churned/won contacts share deal IDs but must not represent active deal rows —
+    # their company names would be wrong (e.g. "Walmart, Inc." instead of "Monument Grills")
     seen_deal_ids = set()
     show_deal_flags = []
-    for c, cls in zip(contacts, classified):
+
+    # First pass: determine the correct (non-skip) representative per deal
+    deal_winner = {}  # deal_id -> contact index (1-based)
+    for idx, (c, cls) in enumerate(zip(contacts, classified), 1):
         did = c.get("deal_id")
-        if did and cls == "active" and did not in seen_deal_ids:
+        st  = (c["properties"].get("hs_lead_status") or "").lower()
+        if did and cls == "active" and did not in deal_winner:
+            if st not in CHURN_STATUSES and st not in WON_CONTACT_STATUS:
+                deal_winner[did] = idx
+
+    # Second pass: fall back to first contact if all were skipped
+    for idx, (c, cls) in enumerate(zip(contacts, classified), 1):
+        did = c.get("deal_id")
+        if did and cls == "active" and did not in deal_winner:
+            deal_winner[did] = idx  # all churned/won — use first anyway
+
+    # Build flags
+    for idx, (c, cls) in enumerate(zip(contacts, classified), 1):
+        did = c.get("deal_id")
+        if did and cls == "active" and deal_winner.get(did) == idx:
             show_deal_flags.append(True)
             seen_deal_ids.add(did)
         else:
@@ -407,16 +426,32 @@ def regenerate_template(current_template, partner_name, contacts, total_count):
         preserved_section = preserved_section.replace(WRONG_WON_NAME, CORRECT_WON_NAME)
         log("  Auto-corrected Closed Won name cell", "DEBUG")
 
-    # Auto-correct Closed Won company cell to use pair[6]
-    WRONG_WON_CO = '{{ c.company if c.company else "\u2014" }}'
-    CORRECT_WON_CO = '{{ pair[6] if pair[6] else "\u2014" }}'
-    # Only in won table context (after pair[4])
-    if 'pair[4]' in preserved_section and WRONG_WON_CO in preserved_section:
-        # Replace last occurrence of company cell (in won table)
+    # ── Auto-correct c.company → pair[7] in ALL table cells ──────────────────
+    # HubSpot HubL silently returns empty for c.company dict access in loops 2+
+    # pair[7] is always pre-populated with the company from HubSpot
+    for wrong_co, right_co in [
+        ('{{ c.company if c.company else "\u2014" }}', '{{ pair[7] if pair[7] else "\u2014" }}'),
+        ('{{ c.company if c.company else "—" }}',       '{{ pair[7] if pair[7] else "—" }}'),
+    ]:
+        if wrong_co in preserved_section:
+            preserved_section = preserved_section.replace(wrong_co, right_co)
+            log("  Auto-corrected c.company → pair[7]", "DEBUG")
+
+    # ── Auto-correct Table 4 Closed Won company → pair[6] ──────────────────
+    # pair[6] holds the won contact's company, only populated for show_won rows
+    WRONG_WON_CO = '{{ pair[7] if pair[7] else "\u2014" }}'
+    RIGHT_WON_CO  = '{{ pair[6] if pair[6] else "\u2014" }}'
+    WRONG_WON_CO2 = '{{ pair[7] if pair[7] else "—" }}'
+    RIGHT_WON_CO2  = '{{ pair[6] if pair[6] else "—" }}'
+    # Only replace LAST occurrence (Table 4 — after all other table cells)
+    if WRONG_WON_CO in preserved_section:
         last_idx = preserved_section.rfind(WRONG_WON_CO)
-        if last_idx > 0:
-            preserved_section = preserved_section[:last_idx] + CORRECT_WON_CO + preserved_section[last_idx+len(WRONG_WON_CO):]
-            log("  Auto-corrected Closed Won company cell", "DEBUG")
+        preserved_section = preserved_section[:last_idx] + RIGHT_WON_CO + preserved_section[last_idx+len(WRONG_WON_CO):]
+        log("  Auto-corrected Table 4 company → pair[6]", "DEBUG")
+    elif WRONG_WON_CO2 in preserved_section:
+        last_idx = preserved_section.rfind(WRONG_WON_CO2)
+        preserved_section = preserved_section[:last_idx] + RIGHT_WON_CO2 + preserved_section[last_idx+len(WRONG_WON_CO2):]
+        log("  Auto-corrected Table 4 company → pair[6]", "DEBUG")
 
     new_block = generate_variable_block(partner_name, contacts, total_count)
     return new_block + preserved_section
