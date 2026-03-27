@@ -329,12 +329,14 @@ def generate_variable_block(partner_name, contacts, total_count):
         lines.append("{% set d" + str(i) + " = " + var + " %}")
     lines.append("")
 
-    # Normalised statuses
-    lines.append("{# \u2500\u2500 Normalised lead statuses \u2500\u2500 #}")
-    for i in range(1, len(contacts) + 1):
-        lines.append("{% set s" + str(i) + " = c" + str(i) + ".hs_lead_status | lower %}")
+    # ── KEY FIX: s{i} as explicit lowercase strings ────────────────────────
+    # HubSpot HubL silently returns empty for c{i}.hs_lead_status in loops 2+
+    # Hardcoding s{i} guarantees correct badge rendering in ALL 4 tables
+    lines.append("{# \u2500\u2500 Lead statuses \u2014 explicit strings (avoids HubL dict-access quirk) \u2500\u2500 #}")
+    for i, c in enumerate(contacts, 1):
+        st_lower = (c["properties"].get("hs_lead_status") or "new").lower().replace('"', '\\"')
+        lines.append('{% set s' + str(i) + ' = "' + st_lower + '" %}')
     lines.append("")
-
     # Dedup flags
     lines.append("{# \u2500\u2500 Dedup: show_deal=first active deal; show_won=first won contact \u2500\u2500 #}")
     for i, (sd, sw) in enumerate(zip(show_deal_flags, show_won_flags), 1):
@@ -376,13 +378,20 @@ def generate_variable_block(partner_name, contacts, total_count):
         "",
         "{% set pairs = [",
     ]
-    for i, c in enumerate(contacts, 1):
+    # ── 8-element pairs ─────────────────────────────────────────────────────
+    # pair[0]=c  pair[1]=d  pair[2]=s  pair[3]=show_deal  pair[4]=show_won
+    # pair[5]=won display name  pair[6]=won company  pair[7]=company (all tables)
+    for i, (c, sw) in enumerate(zip(contacts, show_won_flags), 1):
         comma = "," if i < len(contacts) else ""
-        won_name = won_deal_names.get(c["id"], "").replace('"', '\\"').strip()
+        won_name    = won_deal_names.get(c["id"], "").replace('"', '\\"').strip()
+        won_company = (c["properties"].get("company") or "").replace('"', '\\"').strip() if sw else ""
+        company     = (c["properties"].get("company") or "").replace('"', '\\"').strip()
         lines.append(
             "  [c" + str(i) + ", d" + str(i) + ", s" + str(i) +
             ", show_deal" + str(i) + ", show_won" + str(i) +
-            ', "' + won_name + '"]' + comma
+            ', "' + won_name    + '"'
+            ', "' + won_company + '"'
+            ', "' + company     + '"]' + comma
         )
     lines += ["] %}", ""]
 
