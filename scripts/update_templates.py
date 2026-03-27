@@ -446,21 +446,30 @@ def regenerate_template(current_template, partner_name, contacts, total_count):
             preserved_section = preserved_section.replace(wrong_co, right_co)
             log("  Auto-corrected c.company → pair[7]", "DEBUG")
 
-    # ── Auto-correct Table 4 Closed Won company → pair[6] ──────────────────
-    # pair[6] holds the won contact's company, only populated for show_won rows
-    WRONG_WON_CO = '{{ pair[7] if pair[7] else "\u2014" }}'
-    RIGHT_WON_CO  = '{{ pair[6] if pair[6] else "\u2014" }}'
-    WRONG_WON_CO2 = '{{ pair[7] if pair[7] else "—" }}'
-    RIGHT_WON_CO2  = '{{ pair[6] if pair[6] else "—" }}'
-    # Only replace LAST occurrence (Table 4 — after all other table cells)
-    if WRONG_WON_CO in preserved_section:
-        last_idx = preserved_section.rfind(WRONG_WON_CO)
-        preserved_section = preserved_section[:last_idx] + RIGHT_WON_CO + preserved_section[last_idx+len(WRONG_WON_CO):]
-        log("  Auto-corrected Table 4 company → pair[6]", "DEBUG")
-    elif WRONG_WON_CO2 in preserved_section:
-        last_idx = preserved_section.rfind(WRONG_WON_CO2)
-        preserved_section = preserved_section[:last_idx] + RIGHT_WON_CO2 + preserved_section[last_idx+len(WRONG_WON_CO2):]
-        log("  Auto-corrected Table 4 company → pair[6]", "DEBUG")
+    # ── Auto-correct Table 4 Closed Won company cell → pair[6] ─────────────
+    # Table 4 is identified by the {% if pair[4] %} loop condition.
+    # Within that block, the company cell must use pair[6], not pair[7].
+    import re as _re_t4
+    # Find the Table 4 won loop block and replace company cell there only
+    def fix_table4_company(section):
+        # Split at the won table loop start
+        won_loop_marker = "{%- if pair[4] %}" if "{%- if pair[4] %}" in section else "{% if pair[4] %}"
+        idx = section.find(won_loop_marker)
+        if idx == -1:
+            return section
+        before = section[:idx]
+        after  = section[idx:]
+        # In the after section, replace first occurrence of pair[7] company cell → pair[6]
+        after = after.replace(
+            '{{ pair[7] if pair[7] else "\u2014" }}',
+            '{{ pair[6] if pair[6] else "\u2014" }}', 1
+        )
+        after = after.replace(
+            '{{ pair[7] if pair[7] else "—" }}',
+            '{{ pair[6] if pair[6] else "—" }}', 1
+        )
+        return before + after
+    preserved_section = fix_table4_company(preserved_section)
 
     new_block = generate_variable_block(partner_name, contacts, total_count)
     return new_block + preserved_section
@@ -639,10 +648,20 @@ def process_partner(partner):
         log(f"  Company name changes detected — regenerating template")
         company_changed = True
 
-    result["changed"] = bool(added or removed or count_changed or status_changed or company_changed)
+    # Also trigger if template still uses old c.company or missing pair[7]
+    # Catches cases where Design Manager has old structure — always auto-upgrade
+    structure_outdated = (
+        "c.company" in current_template or
+        "pair[7]" not in current_template or
+        "hs_lead_status | lower" in current_template
+    )
+    if structure_outdated:
+        log("  Template structure outdated (missing pair[7] or c.company present) — regenerating")
+
+    result["changed"] = bool(added or removed or count_changed or status_changed or company_changed or structure_outdated)
 
     if not result["changed"]:
-        log(f"  No changes detected — template is up to date ✅")
+        log("  No changes detected — template is up to date")
         return result
 
     # Phase D — Regenerate template
