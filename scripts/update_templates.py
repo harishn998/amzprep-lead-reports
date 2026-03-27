@@ -581,13 +581,21 @@ def process_partner(partner):
     # Trigger regeneration if any contact's status doesn't match template
     template_statuses = set(_re.findall(r'"hs_lead_status":\s*"([^"]+)"', current_template))
     live_statuses = {(c["properties"].get("hs_lead_status") or "NEW") for c in contacts}
-    # If live has a status not in template or vice versa — regenerate
     status_mismatch = bool(live_statuses - template_statuses) or bool(template_statuses - live_statuses - {"NEW"})
     if status_mismatch:
         log(f"  Status changes detected — regenerating template")
         status_changed = True
 
-    result["changed"] = bool(added or removed or count_changed or status_changed)
+    # Also trigger if any contact's company name has changed
+    # Companies are hardcoded in the template — sync changes from HubSpot
+    company_changed = False
+    template_companies = set(_re.findall(r'"company":\s*"([^"]*)"\s*[,}]', current_template))
+    live_companies = {(c["properties"].get("company") or "").replace('"', '\\"') for c in contacts}
+    if live_companies - template_companies or template_companies - live_companies - {""}:
+        log(f"  Company name changes detected — regenerating template")
+        company_changed = True
+
+    result["changed"] = bool(added or removed or count_changed or status_changed or company_changed)
 
     if not result["changed"]:
         log(f"  No changes detected — template is up to date ✅")
