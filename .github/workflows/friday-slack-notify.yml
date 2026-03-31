@@ -1,0 +1,38 @@
+name: Friday Partner Slack Briefings
+
+on:
+  schedule:
+    # Every Friday at 9AM EST = 2PM UTC
+    - cron: '0 14 * * 5'
+
+  workflow_dispatch:
+    inputs:
+      partner_filter:
+        description: 'Single partner name to test (blank = all partners)'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Set true to log without sending any Slack messages'
+        required: false
+        default: 'false'
+
+jobs:
+  friday-briefings:
+    name: Send Friday Briefings to Reps
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Friday Slack notifier
+        run: python scripts/friday_slack_notify.py
+        env:
+          HUBSPOT_TOKEN:   ${{ secrets.HUBSPOT_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          PARTNER_FILTER:  ${{ github.event.inputs.partner_filter || '' }}
+          DRY_RUN:         ${{ github.event.inputs.dry_run || 'false' }}
