@@ -50,6 +50,15 @@
       "slack_reps": [
         {"name": "Harishnath", "slack_user_id": "U07HW2GFSG4"}
       ]
+    },
+    {
+      "partner_name":    "Nexus",
+      "template_file":   "Weekly Lead Report - Nexus.html",
+      "recipient_email": "nexus@amzprep.com",
+      "active": true,
+      "slack_reps": [
+        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+      ]
     }
   ]
 }
