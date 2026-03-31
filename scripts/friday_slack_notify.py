@@ -36,7 +36,7 @@ TECH_CHANNEL    = "C0APUEEFC30"   # #tech-feature-testing
 # ── Logging ─────────────────────────────────────────────────────────
 def log(msg, level="INFO"):
     ts     = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    icons  = {"INFO": "✅", "WARN": "⚠️ ", "ERROR": "❌", "DEBUG": "🔍"}
+    icons  = {"INFO": "[INFO]", "WARN": "[WARN]", "ERROR": "[ERROR]", "DEBUG": "[DEBUG]"}
     print(f"{icons.get(level,'  ')} [{ts}] {msg}", flush=True)
 
 # ── HubSpot Helpers ─────────────────────────────────────────────────
@@ -89,20 +89,14 @@ STAGE_MAP = {
 }
 STATUS_MAP = {
     "connected":"Connected","open_deal":"Open Deal",
-    "cw":"Customer ✓","amzdealwon":"Customer ✓","customer":"Customer ✓",
+    "cw":"Customer","amzdealwon":"Customer","customer":"Customer",
     "cl":"Lost","churned customer":"Churned","churned":"Churned",
     "attempted_to_contact":"Attempted","not interested":"Not Interested",
     "oh":"On Hold","new":"New",
 }
-STATUS_EMOJI = {
-    "connected":"🟢","open_deal":"🔵","cw":"🏆","amzdealwon":"🏆",
-    "customer":"🏆","cl":"🔴","churned customer":"⚫","churned":"⚫",
-    "attempted_to_contact":"🟡","not interested":"⚫",
-    "oh":"⚪","new":"⚪",
-}
 def fmt_status(s):
     sl = (s or "new").lower()
-    return f"{STATUS_EMOJI.get(sl,'⚪')} {STATUS_MAP.get(sl, s or 'New')}"
+    return STATUS_MAP.get(sl, s or "New")
 
 WON_ST   = {"cw","amzdealwon","customer"}
 CHURN_ST = {"churned customer","churned"}
@@ -162,9 +156,9 @@ def build_report(partner_name, contacts):
 def build_dm_message(partner_name, data, today):
     """Full weekly email template summary — sent as DM to assigned rep."""
     L = []
-    L.append(f"*📊 Weekly Lead Report — {partner_name}*")
+    L.append(f"*Weekly Lead Report — {partner_name}*")
     L.append(f"_Friday {today} | Your preview before Monday 10AM EST send_")
-    L.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    L.append("-" * 40)
 
     # Summary cards (matching the email template sections)
     L.append(
@@ -177,7 +171,7 @@ def build_dm_message(partner_name, data, today):
 
     # ── CONNECTED ──────────────────────────────────────────────────
     if data["connected_list"]:
-        L.append(f"*🟢 CONNECTED  ({data['connected']})*")
+        L.append(f"*CONNECTED  ({data['connected']})*")
         for c in data["connected_list"]:
             fn   = (c["properties"].get("firstname") or "").strip()
             ln   = (c["properties"].get("lastname")  or "").strip()
@@ -188,20 +182,20 @@ def build_dm_message(partner_name, data, today):
 
     # ── DEAL STATUS ────────────────────────────────────────────────
     if data["active_deals"]:
-        L.append(f"*🔵 DEAL STATUS  ({len(data['active_deals'])})*")
+        L.append(f"*DEAL STATUS  ({len(data['active_deals'])})*")
         for d in data["active_deals"]:
             L.append(f"  • *{d['deal']}*  |  {d['company']}  |  _{d['stage']}_  |  {d['amount']}")
         L.append("")
 
     # ── CLOSED WON ─────────────────────────────────────────────────
     if data["won_deals"]:
-        L.append(f"*🏆 CLOSED WON  ({len(data['won_deals'])})*")
+        L.append(f"*CLOSED WON  ({len(data['won_deals'])})*")
         for d in data["won_deals"]:
             L.append(f"  • *{d['deal']}*  |  {d['company']}  |  {d['amount']}")
         L.append("")
 
     # ── ALL LEADS ──────────────────────────────────────────────────
-    L.append(f"*📋 ALL LEADS  ({data['total']})*")
+    L.append(f"*ALL LEADS  ({data['total']})*")
     for c in data["all_contacts"]:
         fn   = (c["properties"].get("firstname") or "").strip()
         ln   = (c["properties"].get("lastname")  or "").strip()
@@ -211,7 +205,7 @@ def build_dm_message(partner_name, data, today):
         L.append(f"  {fmt_status(st)}  *{name}*  |  _{co}_")
 
     L.append("")
-    L.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    L.append("-" * 40)
     L.append("_Data pulled live from HubSpot. Reply with any changes before Monday's send._")
     return "\n".join(L)
 
@@ -319,7 +313,7 @@ def main():
             dm_channel = open_dm_channel(uid)
             if dm_channel:
                 ok = slack_post(dm_channel, dm_text)
-                log(f"  DM → {rep_name} ({uid}): {'✅ sent' if ok else '❌ FAILED'}")
+                log(f"  DM to {rep_name} ({uid}): {'sent' if ok else 'FAILED'}")
                 if ok: dm_ok_count += 1
             else:
                 log(f"  Could not open DM with {rep_name}", "WARN")
@@ -332,15 +326,15 @@ def main():
             if r.get("slack_user_id") and not r["slack_user_id"].startswith("REPLACE")
         )
         notif_msg = (
-            f":calendar: *Friday Briefing sent — {name}* | Rep: {rep_tags}\n"
-            f"  Total: *{data['total']}*  |  "
+            f"*Friday Briefing — {name}* | Assigned Rep: {rep_tags}\n"
+            f"Total Leads: *{data['total']}*  |  "
             f"Connected: *{data['connected']}*  |  "
             f"Active Deals: *{len(data['active_deals'])}*  |  "
             f"Closed Won: *{len(data['won_deals'])}*\n"
-            f"  _Full report sent as DM to rep(s) above._"
+            f"Full report has been sent as a direct message to the assigned rep(s)."
         )
         ch_ok = slack_post(TECH_CHANNEL, notif_msg)
-        log(f"  #tech-feature-testing: {'✅' if ch_ok else '❌ FAILED'}")
+        log(f"  #tech-feature-testing notification: {'sent' if ch_ok else 'FAILED'}")
 
         results.append({
             "partner": name, "status": "ok",
@@ -354,30 +348,30 @@ def main():
     # ── Final run summary to #tech-feature-testing ──────────────────
     run_date  = datetime.now(timezone.utc).strftime("%A %B %d, %Y at %H:%M UTC")
     any_error = any(r["status"] not in ("ok","skipped") for r in results)
-    icon      = "✅" if not any_error else "⚠️"
-    mode_note = " _(dry run)_" if DRY_RUN else ""
+    mode_note = " (dry run)" if DRY_RUN else ""
+    status_note = "Complete" if not any_error else "Completed with warnings"
 
     summary = [
-        f"{icon} *All Friday Briefings Complete*{mode_note}",
+        f"*Friday Partner Briefings — {status_note}*{mode_note}",
         f"_{run_date}_\n"
     ]
     for r in results:
         if r["status"] == "ok":
             summary.append(
-                f"✅ *{r['partner']}*: {r['contacts']} leads | "
-                f"{r['active_deals']} active | {r['won']} won | "
-                f"DM sent to {r['dm_sent']} rep(s)"
+                f"*{r['partner']}*: {r['contacts']} leads | "
+                f"{r['active_deals']} active deals | {r['won']} closed won | "
+                f"report delivered to {r['dm_sent']} rep(s)"
             )
         elif r["status"] == "skipped":
-            summary.append(f"⏭️ *{r['partner']}*: skipped (no contacts)")
+            summary.append(f"*{r['partner']}*: skipped — no contacts found")
         else:
-            summary.append(f"❌ *{r['partner']}*: failed")
-    summary.append("\n_Reps have been briefed. Monday 10AM EST send proceeds as scheduled._")
+            summary.append(f"*{r['partner']}*: delivery failed")
+    summary.append("\nAll assigned reps have been briefed. Monday 10AM EST automated send will proceed as scheduled.")
 
     slack_post(TECH_CHANNEL, "\n".join(summary))
 
     if any_error: sys.exit(1)
-    log("All done ✅")
+    log("Friday briefings complete.")
 
 if __name__ == "__main__":
     main()
