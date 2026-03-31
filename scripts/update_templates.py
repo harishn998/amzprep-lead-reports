@@ -19,10 +19,12 @@ from datetime import datetime, timezone
 
 # ── Configuration ─────────────────────────────────────────────────
 HUBSPOT_TOKEN   = os.environ.get("HUBSPOT_TOKEN", "")
-SLACK_WEBHOOK   = os.environ.get("SLACK_WEBHOOK_URL", "")
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 PARTNER_FILTER  = os.environ.get("PARTNER_FILTER", "").strip()
 DRY_RUN         = os.environ.get("DRY_RUN", "false").lower() == "true"
 HS_BASE_URL     = "https://api.hubapi.com"
+SLACK_API       = "https://slack.com/api"
+NOTIFY_CHANNEL  = "C0APUEEFC30"   # #tech-feature-testing
 
 # HubSpot pipeline stage IDs → display labels
 STAGE_LABELS = {
@@ -43,7 +45,7 @@ def log(msg, level="INFO"):
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     entry = {"time": ts, "level": level, "message": msg}
     log_entries.append(entry)
-    prefix = {"INFO": "✅", "WARN": "⚠️", "ERROR": "❌", "DEBUG": "🔍"}.get(level, "  ")
+    prefix = {"INFO": "[INFO]", "WARN": "[WARN]", "ERROR": "[ERROR]", "DEBUG": "[DEBUG]"}.get(level, "      ")
     print(f"{prefix} [{ts}] {msg}")
 
 def save_log():
@@ -91,18 +93,25 @@ def hs_request(method, path, body=None, is_multipart=False):
         return e.code, {"error": body_text}
 
 def slack_notify(msg):
-    """Send a Slack message via webhook."""
-    if not SLACK_WEBHOOK:
-        log("No Slack webhook configured — skipping notification", "WARN")
+    """Post a message to #tech-feature-testing via Bot Token."""
+    if not SLACK_BOT_TOKEN:
+        log("SLACK_BOT_TOKEN not configured — skipping notification", "WARN")
         return
-    data = json.dumps({"text": msg}).encode("utf-8")
-    req = urllib.request.Request(
-        SLACK_WEBHOOK, data=data,
-        headers={"Content-Type": "application/json"}, method="POST"
+    data = json.dumps({"channel": NOTIFY_CHANNEL, "text": msg}).encode("utf-8")
+    req  = urllib.request.Request(
+        f"{SLACK_API}/chat.postMessage", data=data,
+        headers={
+            "Content-Type": "application/json; charset=utf-8",
+            "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+        }, method="POST"
     )
     try:
-        urllib.request.urlopen(req)
-        log("Slack notification sent")
+        with urllib.request.urlopen(req) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            if body.get("ok"):
+                log("Slack notification sent to #tech-feature-testing")
+            else:
+                log(f"Slack API error: {body.get('error')}", "WARN")
     except Exception as e:
         log(f"Slack notification failed: {e}", "WARN")
 
@@ -507,7 +516,7 @@ def write_template(filename, content):
     )
 
     if status in (200, 201):
-        log(f"Template written to published: '{filename}' ✅")
+        log(f"Template written to published: '{filename}'")
         return True
     else:
         log(f"Failed to write template '{filename}': HTTP {status}", "ERROR")
@@ -516,7 +525,7 @@ def write_template(filename, content):
 
 def publish_templates(filenames):
     """No-op: templates are now written directly to live, no push step needed."""
-    log(f"Templates written directly to live — no publish step needed ✅")
+    log(f"Templates written directly to live — no publish step needed")
     return True
 
 
@@ -681,7 +690,7 @@ def process_partner(partner):
         result["error"] = "Failed to write updated template to Design Manager"
         return result
 
-    log(f"  Template updated successfully: {name} ✅")
+    log(f"  Template updated successfully: {name}")
     return result
 
 
@@ -696,7 +705,7 @@ def main():
     # Validate token
     if not HUBSPOT_TOKEN:
         log("HUBSPOT_TOKEN is not set — cannot proceed", "ERROR")
-        slack_notify("❌ *Weekly Lead Report Auto-Update FAILED*\nHUBSPOT_TOKEN secret is not configured in GitHub.")
+        slack_notify("Weekly Lead Report Auto-Update FAILED\nHUBSPOT_TOKEN secret is not configured in GitHub.")
         save_log()
         sys.exit(1)
 
@@ -736,27 +745,48 @@ def main():
     any_error = any(r["status"] == "error" for r in results)
     run_date  = datetime.now(timezone.utc).strftime("%A %B %d, %Y at %H:%M UTC")
 
+    mode_note  = " (dry run)" if DRY_RUN else ""
+    status_hdr = "ERRORS DETECTED" if any_error else "Complete"
+
+    # Table header
+    col_partner = 24
+    col_contacts = 9
+    col_status = 20
+    sep = "-" * (col_partner + col_contacts + col_status + 6)
+
+    lines = [
+        f"Weekly Lead Report Auto-Update — {status_hdr}{mode_note}",
+        f"{run_date}",
+        "",
+        f"{'Partner':<{col_partner}}  {'Contacts':<{col_contacts}}  {'Status':<{col_status}}",
+        sep,
+    ]
+    for r in results:
+        if r["status"] == "error":
+            status_str = "FAILED"
+        elif r["status"] == "skipped":
+            status_str = "Skipped"
+        elif r.get("changed") and r.get("pushed"):
+            status_str = "Updated"
+        elif not r.get("changed"):
+            status_str = "No change"
+        else:
+            status_str = "Dry run"
+        lines.append(
+            f"{r['partner']:<{col_partner}}  {str(r['contacts_found']):<{col_contacts}}  {status_str:<{col_status}}"
+        )
+        if r.get("error"):
+            lines.append(f"  Error: {r['error']}")
+
+    lines.append(sep)
     if any_error:
-        lines = [f"❌ *Weekly Lead Report Auto-Update — ERRORS DETECTED*\n_{run_date}_\n"]
-        for r in results:
-            icon = "✅" if r["status"] == "ok" else ("⏭️" if r["status"] == "skipped" else "❌")
-            changed = "Updated ✅" if r.get("changed") and r.get("pushed") else ("No change" if not r.get("changed") else "FAILED ❌")
-            lines.append(f"{icon} *{r['partner']}*: {r['contacts_found']} contacts — {changed}")
-            if r.get("error"):
-                lines.append(f"   Error: {r['error']}")
-        lines.append("\n⚠️ *Action needed: manually check Design Manager before Monday 10AM EST*")
-        slack_notify("\n".join(lines))
+        lines.append("Action required: check Design Manager before Monday 10AM EST.")
     else:
-        mode_note = " _(dry run — no changes written)_" if DRY_RUN else ""
-        lines = [f"✅ *Weekly Lead Report Auto-Update Complete*{mode_note}\n_{run_date}_\n"]
-        for r in results:
-            icon  = "⏭️" if r["status"] == "skipped" else "✅"
-            changed = "Updated ✅" if r.get("changed") and r.get("pushed") else ("No change needed" if not r.get("changed") else "Dry run")
-            lines.append(f"{icon} *{r['partner']}*: {r['contacts_found']} contacts — {changed}")
         if not DRY_RUN and files_to_publish:
-            lines.append(f"\n📤 {len(files_to_publish)} template(s) published to live")
-        lines.append("\n🗓️ Monday 10AM EST Zapier send is ready ✅")
-        slack_notify("\n".join(lines))
+            lines.append(f"{len(files_to_publish)} template(s) published to Design Manager.")
+        lines.append("Monday 10AM EST automated send is ready.")
+
+    slack_notify("```\n" + "\n".join(lines) + "\n```")
 
     # Save run log
     final_log = {
@@ -776,7 +806,7 @@ def main():
         log("One or more partners failed — exiting with error", "ERROR")
         sys.exit(1)
 
-    log("All partners processed successfully ✅")
+    log("All partners processed successfully")
 
 
 if __name__ == "__main__":
