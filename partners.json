@@ -1,54 +1,54 @@
 {
+  "_comment": "AMZ Prep partner config — used by both update_templates.py and friday_slack_notify.py",
+  "_slack_ids_reference": {
+    "Jerun Francis": "U0ACYKH849J",
+    "Harishnath": "U07HW2GFSG4"
+  },
   "partners": [
     {
-      "partner_name": "EComm Architects",
-      "template_file": "Weekly Lead Report - EComm Architects.html",
-      "recipient_email": "ecommarchitect@amzprep.com",
-      "active": true
-    },
-    {
-      "partner_name": "Inspire Brands Group",
-      "template_file": "Weekly Lead Report - Inspire Brands Group.html",
-      "recipient_email": "inspiregroup@amzprep.com",
-      "active": true
-    },
-    {
-      "partner_name": "Emplicit",
-      "template_file": "Weekly Lead Report - Emplicit.html",
+      "partner_name":    "Emplicit",
+      "template_file":   "Weekly Lead Report - Emplicit.html",
       "recipient_email": "emplicit@amzprep.com",
-      "active": true
+      "active": true,
+      "slack_reps": [
+        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+      ]
     },
     {
-      "partner_name": "Walmart",
-      "template_file": "Weekly Lead Report - Walmart.html",
+      "partner_name":    "Hyla 437",
+      "template_file":   "Weekly Lead Report - Hyla 437.html",
+      "recipient_email": "hyla437@amzprep.com",
+      "active": true,
+      "slack_reps": [
+        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+      ]
+    },
+    {
+      "partner_name":    "Walmart",
+      "template_file":   "Weekly Lead Report - Walmart.html",
       "recipient_email": "walmart@amzprep.com",
-      "active": true
+      "active": true,
+      "slack_reps": [
+        {"name": "Harishnath", "slack_user_id": "U07HW2GFSG4"}
+      ]
     },
     {
-      "partner_name": "Hyla 437",
-      "template_file": "Weekly Lead Report - Hyla 437.html",
-      "recipient_email": "shop437@amzprep.com",
-      "active": true
+      "partner_name":    "Inspire Brands Group",
+      "template_file":   "Weekly Lead Report - Inspire Brands Group.html",
+      "recipient_email": "inspiregroup@amzprep.com",
+      "active": true,
+      "slack_reps": [
+        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+      ]
+    },
+    {
+      "partner_name":    "EComm Architects",
+      "template_file":   "Weekly Lead Report - EComm Architects.html",
+      "recipient_email": "ecommarchitect@amzprep.com",
+      "active": true,
+      "slack_reps": [
+        {"name": "Harishnath", "slack_user_id": "U07HW2GFSG4"}
+      ]
     }
-  ],
-  "notes": {
-    "adding_new_partner": [
-      "1. Add new partner block to the partners array above",
-      "2. Set active: true",
-      "3. Create the Design Manager template file in HubSpot",
-      "   (copy an existing template, update the partner name in the header)",
-      "4. Create a HubSpot workflow for the new partner",
-      "5. Create a Zapier Zap pointing to the new workflow",
-      "6. The GitHub Action will automatically handle the new partner",
-      "   on its next scheduled run — no code changes needed"
-    ],
-    "stage_ids": {
-      "13390264": "Closed Won",
-      "13390265": "Closed Lost",
-      "201513064": "Analysis",
-      "1247679147": "Negotiation",
-      "1271308871": "Deal Referred",
-      "1271308872": "Partner Won"
-    }
-  }
+  ]
 }
