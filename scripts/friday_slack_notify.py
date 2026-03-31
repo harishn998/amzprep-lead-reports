@@ -154,60 +154,84 @@ def build_report(partner_name, contacts):
     }
 
 def build_dm_message(partner_name, data, today):
-    """Full weekly email template summary — sent as DM to assigned rep."""
+    """Full weekly lead report — sent as DM to assigned rep, table format."""
     L = []
-    L.append(f"*Weekly Lead Report — {partner_name}*")
-    L.append(f"_Friday {today} | Your preview before Monday 10AM EST send_")
-    L.append("-" * 40)
+    sep = "-" * 60
 
-    # Summary cards (matching the email template sections)
+    # ── Header ────────────────────────────────────────────────────
+    L.append(f"Weekly Lead Report: {partner_name}")
+    L.append(f"Friday {today}  |  Preview before Monday 10AM EST send")
+    L.append(sep)
+
+    # ── Summary row ───────────────────────────────────────────────
     L.append(
-        f"*Total Leads:* {data['total']}   "
-        f"*Connected:* {data['connected']}   "
-        f"*Active Deals:* {len(data['active_deals'])}   "
-        f"*Closed Won:* {len(data['won_deals'])}"
+        f"Total: {data['total']}    "
+        f"Connected: {data['connected']}    "
+        f"Active Deals: {len(data['active_deals'])}    "
+        f"Closed Won: {len(data['won_deals'])}"
     )
     L.append("")
 
-    # ── CONNECTED ──────────────────────────────────────────────────
+    # ── CONNECTED ─────────────────────────────────────────────────
     if data["connected_list"]:
-        L.append(f"*CONNECTED  ({data['connected']})*")
+        col_n = 28; col_c = 24
+        L.append(f"CONNECTED  ({data['connected']})")
+        L.append(f"  {'Name':<{col_n}}  {'Company':<{col_c}}")
+        L.append("  " + "-" * (col_n + col_c + 2))
         for c in data["connected_list"]:
             fn   = (c["properties"].get("firstname") or "").strip()
             ln   = (c["properties"].get("lastname")  or "").strip()
             name = (fn + " " + ln).strip() or c["properties"].get("email","")
             co   = c["properties"].get("company") or "—"
-            L.append(f"  • *{name}*  |  _{co}_")
+            L.append(f"  {name:<{col_n}}  {co:<{col_c}}")
         L.append("")
 
-    # ── DEAL STATUS ────────────────────────────────────────────────
+    # ── DEAL STATUS ───────────────────────────────────────────────
     if data["active_deals"]:
-        L.append(f"*DEAL STATUS  ({len(data['active_deals'])})*")
+        col_d = 32; col_c = 20; col_s = 14; col_a = 10
+        L.append(f"DEAL STATUS  ({len(data['active_deals'])})")
+        L.append(f"  {'Deal':<{col_d}}  {'Company':<{col_c}}  {'Stage':<{col_s}}  {'Value':<{col_a}}")
+        L.append("  " + "-" * (col_d + col_c + col_s + col_a + 6))
         for d in data["active_deals"]:
-            L.append(f"  • *{d['deal']}*  |  {d['company']}  |  _{d['stage']}_  |  {d['amount']}")
+            L.append(
+                f"  {d['deal'][:col_d]:<{col_d}}  "
+                f"{d['company'][:col_c]:<{col_c}}  "
+                f"{d['stage'][:col_s]:<{col_s}}  "
+                f"{d['amount']:<{col_a}}"
+            )
         L.append("")
 
-    # ── CLOSED WON ─────────────────────────────────────────────────
+    # ── CLOSED WON ────────────────────────────────────────────────
     if data["won_deals"]:
-        L.append(f"*CLOSED WON  ({len(data['won_deals'])})*")
+        col_d = 32; col_c = 24; col_a = 10
+        L.append(f"CLOSED WON  ({len(data['won_deals'])})")
+        L.append(f"  {'Deal':<{col_d}}  {'Company':<{col_c}}  {'Value':<{col_a}}")
+        L.append("  " + "-" * (col_d + col_c + col_a + 4))
         for d in data["won_deals"]:
-            L.append(f"  • *{d['deal']}*  |  {d['company']}  |  {d['amount']}")
+            L.append(
+                f"  {d['deal'][:col_d]:<{col_d}}  "
+                f"{d['company'][:col_c]:<{col_c}}  "
+                f"{d['amount']:<{col_a}}"
+            )
         L.append("")
 
-    # ── ALL LEADS ──────────────────────────────────────────────────
-    L.append(f"*ALL LEADS  ({data['total']})*")
-    for c in data["all_contacts"]:
+    # ── ALL LEADS ─────────────────────────────────────────────────
+    col_n = 28; col_c = 24; col_s = 20
+    L.append(f"ALL LEADS  ({data['total']})")
+    L.append(f"  #   {'Name':<{col_n}}  {'Company':<{col_c}}  {'Lead Status':<{col_s}}")
+    L.append("  " + "-" * (4 + col_n + col_c + col_s + 4))
+    for idx, c in enumerate(data["all_contacts"], 1):
         fn   = (c["properties"].get("firstname") or "").strip()
         ln   = (c["properties"].get("lastname")  or "").strip()
         name = (fn + " " + ln).strip() or c["properties"].get("email","")
         co   = c["properties"].get("company") or "—"
-        st   = (c["properties"].get("hs_lead_status") or "NEW")
-        L.append(f"  {fmt_status(st)}  *{name}*  |  _{co}_")
+        st   = fmt_status(c["properties"].get("hs_lead_status") or "NEW")
+        L.append(f"  {idx:<3} {name[:col_n]:<{col_n}}  {co[:col_c]:<{col_c}}  {st:<{col_s}}")
 
     L.append("")
-    L.append("-" * 40)
-    L.append("_Data pulled live from HubSpot. Reply with any changes before Monday's send._")
-    return "\n".join(L)
+    L.append(sep)
+    L.append("Data pulled live from HubSpot. Reply with any updates before Monday send.")
+    return "```\n" + "\n".join(L) + "\n```"
 
 # ── Slack API ────────────────────────────────────────────────────────
 def slack_post(channel_id, message):
@@ -326,12 +350,12 @@ def main():
             if r.get("slack_user_id") and not r["slack_user_id"].startswith("REPLACE")
         )
         notif_msg = (
-            f"*Friday Briefing — {name}* | Assigned Rep: {rep_tags}\n"
-            f"Total Leads: *{data['total']}*  |  "
-            f"Connected: *{data['connected']}*  |  "
-            f"Active Deals: *{len(data['active_deals'])}*  |  "
-            f"Closed Won: *{len(data['won_deals'])}*\n"
-            f"Full report has been sent as a direct message to the assigned rep(s)."
+            f"Friday Briefing: {name}  |  Rep: {rep_tags}\n"
+            f"Total: {data['total']}    "
+            f"Connected: {data['connected']}    "
+            f"Active Deals: {len(data['active_deals'])}    "
+            f"Closed Won: {len(data['won_deals'])}\n"
+            f"Full report delivered as direct message to assigned rep(s)."
         )
         ch_ok = slack_post(TECH_CHANNEL, notif_msg)
         log(f"  #tech-feature-testing notification: {'sent' if ch_ok else 'FAILED'}")
@@ -351,22 +375,31 @@ def main():
     mode_note = " (dry run)" if DRY_RUN else ""
     status_note = "Complete" if not any_error else "Completed with warnings"
 
+    col_p = 24; col_c = 9; col_a = 13; col_w = 11; col_s = 16
+    sep_f = "-" * (col_p + col_c + col_a + col_w + col_s + 10)
     summary = [
-        f"*Friday Partner Briefings — {status_note}*{mode_note}",
-        f"_{run_date}_\n"
+        f"Friday Partner Briefings — {status_note}{mode_note}",
+        f"{run_date}",
+        "",
+        f"{'Partner':<{col_p}}  {'Leads':<{col_c}}  {'Active Deals':<{col_a}}  {'Closed Won':<{col_w}}  {'Report':<{col_s}}",
+        sep_f,
     ]
     for r in results:
         if r["status"] == "ok":
-            summary.append(
-                f"*{r['partner']}*: {r['contacts']} leads | "
-                f"{r['active_deals']} active deals | {r['won']} closed won | "
-                f"report delivered to {r['dm_sent']} rep(s)"
-            )
+            s = f"Sent to {r['dm_sent']} rep(s)"
         elif r["status"] == "skipped":
-            summary.append(f"*{r['partner']}*: skipped — no contacts found")
+            s = "Skipped"
         else:
-            summary.append(f"*{r['partner']}*: delivery failed")
-    summary.append("\nAll assigned reps have been briefed. Monday 10AM EST automated send will proceed as scheduled.")
+            s = "Failed"
+        summary.append(
+            f"{r.get('partner',''):<{col_p}}  "
+            f"{str(r.get('contacts','')):<{col_c}}  "
+            f"{str(r.get('active_deals','')):<{col_a}}  "
+            f"{str(r.get('won','')):<{col_w}}  "
+            f"{s:<{col_s}}"
+        )
+    summary.append(sep_f)
+    summary.append("All assigned reps have been briefed. Monday 10AM EST automated send proceeds as scheduled.")
 
     slack_post(TECH_CHANNEL, "\n".join(summary))
 
