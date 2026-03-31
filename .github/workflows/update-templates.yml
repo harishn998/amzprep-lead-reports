@@ -43,10 +43,10 @@ jobs:
 
       - name: Run template update script
         env:
-          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          PARTNER_FILTER: ${{ github.event.inputs.partner_name }}
-          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          HUBSPOT_TOKEN:   ${{ secrets.HUBSPOT_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          PARTNER_FILTER:  ${{ github.event.inputs.partner_name }}
+          DRY_RUN:         ${{ github.event.inputs.dry_run || 'false' }}
         run: |
           python scripts/update_templates.py
 
