@@ -2,7 +2,8 @@
   "_comment": "AMZ Prep partner config — used by both update_templates.py and friday_slack_notify.py",
   "_slack_ids_reference": {
     "Jerun Francis": "U0ACYKH849J",
-    "Harishnath": "U07HW2GFSG4"
+    "Harishnath": "U07HW2GFSG4",
+    "Arishekar N": "U06CP1PJN3Y"
   },
   "partners": [
     {
@@ -11,7 +12,7 @@
       "recipient_email": "emplicit@amzprep.com",
       "active": true,
       "slack_reps": [
-        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+        {"name": "Arishekar N", "slack_user_id": "U06CP1PJN3Y"}
       ]
     },
     {
