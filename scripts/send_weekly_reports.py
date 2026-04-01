@@ -1,27 +1,24 @@
 """
 AMZ Prep — Weekly Lead Report Email Sender
 ==========================================
-Replaces Zapier entirely. Runs every Monday at 3PM UTC (10AM EST).
+Replaces Zapier. Runs every Monday at 3PM UTC (10AM EST).
 
 For each active partner:
   1. Fetches all contacts from the partner's HubSpot recipient list
-  2. Enrolls each contact individually in the partner's HubSpot workflow
-  3. HubSpot workflow: Set marketing contact → Send email → End
+  2. Removes them from the list, then immediately re-adds them
+  3. HubSpot detects the re-membership → triggers the workflow automatically
+  4. Workflow: Set marketing contact → Send email → End
 
-This means every person on the list gets their own individual email,
-with no shared inbox privacy risk.
+This approach bypasses the legacy /automation/v2 enrollment API entirely,
+using list operations which work with all workflow types including
+workflows built in HubSpot's new editor.
 
 Required GitHub Secrets:
-  HUBSPOT_TOKEN    — HubSpot Private App token
+  HUBSPOT_TOKEN    — HubSpot Private App token (needs crm.lists.read + crm.lists.write)
 
-Optional:
-  PARTNER_FILTER   — Comma-separated partner names (leave blank = all)
-  DRY_RUN          — "true" to log only, no enrollments made
-
-partners.json fields used by this script:
-  partner_name        — for logging
-  hubspot_list_id     — HubSpot Static List ID (add recipients here)
-  hubspot_workflow_id — HubSpot Workflow ID to enroll contacts into
+Required partners.json fields:
+  hubspot_list_id     — HubSpot Static List ID
+  hubspot_workflow_id — for reference/logging only (not used in API call)
   active              — only processes active: true partners
 """
 
@@ -52,74 +49,96 @@ def hs(method, path, body=None):
     try:
         with urllib.request.urlopen(req) as r:
             resp_body = r.read().decode("utf-8")
-            return r.status, json.loads(resp_body) if resp_body else {}
+            return r.status, json.loads(resp_body) if resp_body.strip() else {}
     except urllib.error.HTTPError as e:
         err = e.read().decode("utf-8")
-        log(f"HS {e.code} {method} {path}: {err[:200]}", "ERROR")
+        log(f"HS {e.code} {method} {path}: {err[:300]}", "ERROR")
         return e.code, {}
 
-def get_list_contacts(list_id):
-    """Fetch all contacts from a HubSpot Static List."""
-    contacts = []
-    after    = None
-
+def get_list_members(list_id):
+    """Fetch all contact record IDs from a HubSpot Static List."""
+    record_ids = []
+    after      = None
     while True:
         path = f"/crm/v3/lists/{list_id}/memberships?limit=100"
         if after:
             path += f"&after={after}"
-
         status, resp = hs("GET", path)
-
         if status != 200:
             log(f"Failed to fetch list {list_id}: HTTP {status}", "ERROR")
-            break
-
-        results = resp.get("results", [])
-        for r in results:
-            cid = r.get("recordId")
-            if cid:
-                contacts.append(str(cid))
-
-        paging = resp.get("paging", {}).get("next", {})
-        after  = paging.get("after") if paging else None
+            return []
+        for r in resp.get("results", []):
+            rid = r.get("recordId")
+            if rid:
+                record_ids.append(int(rid))
+        nxt = resp.get("paging", {}).get("next", {})
+        after = nxt.get("after") if nxt else None
         if not after:
             break
         time.sleep(0.1)
+    return record_ids
 
-    return contacts
+def get_contact_emails(record_ids):
+    """Batch fetch email addresses for a list of contact IDs."""
+    emails = {}
+    # Process in batches of 100
+    for i in range(0, len(record_ids), 100):
+        batch = record_ids[i:i+100]
+        body  = {
+            "inputs": [{"id": str(rid)} for rid in batch],
+            "properties": ["email", "firstname", "lastname"]
+        }
+        status, resp = hs("POST", "/crm/v3/objects/contacts/batch/read", body)
+        if status in (200, 207):
+            for r in resp.get("results", []):
+                rid   = int(r.get("id", 0))
+                email = r.get("properties", {}).get("email", "")
+                fn    = r.get("properties", {}).get("firstname", "") or ""
+                ln    = r.get("properties", {}).get("lastname", "")  or ""
+                name  = (fn + " " + ln).strip() or email
+                if email:
+                    emails[rid] = {"email": email, "name": name}
+        time.sleep(0.2)
+    return emails
 
-def get_contact_email(contact_id):
-    """Get email address for a contact by ID."""
-    status, resp = hs("GET", f"/crm/v3/objects/contacts/{contact_id}?properties=email,hs_marketable_status")
-    if status == 200:
-        props = resp.get("properties", {})
-        return props.get("email", ""), props.get("hs_marketable_status", "")
-    return "", ""
-
-def set_marketing_contact(contact_id):
-    """Ensure contact is set as marketing contact before enrollment."""
-    status, _ = hs("POST", "/contacts/v1/contacts/vid/{}/profile".format(contact_id), {
-        "properties": [{"property": "hs_marketable_status", "value": "true"}]
-    })
-    return status in (200, 204)
-
-def enroll_in_workflow(workflow_id, email):
-    """Enroll a contact in a HubSpot workflow by email."""
+def remove_from_list(list_id, record_ids):
+    """Remove contacts from a HubSpot list."""
     if DRY_RUN:
-        log(f"  DRY RUN — would enroll {email} in workflow {workflow_id}", "DEBUG")
+        log(f"  DRY RUN — would remove {len(record_ids)} contact(s) from list {list_id}", "DEBUG")
         return True
-    status, _ = hs(
-        "POST",
-        f"/automation/v2/workflows/{workflow_id}/enrollments/contacts/{urllib.request.quote(email)}"
+    status, resp = hs("PUT",
+        f"/crm/v3/lists/{list_id}/memberships/add-and-remove",
+        {"recordIdsToAdd": [], "recordIdsToRemove": record_ids}
     )
-    return status in (200, 204)
+    if status == 200:
+        removed = resp.get("recordsIdsRemoved", [])
+        log(f"  Removed {len(removed)} contact(s) from list")
+        return True
+    log(f"  Remove from list failed: HTTP {status}", "WARN")
+    return False
+
+def add_to_list(list_id, record_ids):
+    """Add contacts back to a HubSpot list."""
+    if DRY_RUN:
+        log(f"  DRY RUN — would add {len(record_ids)} contact(s) to list {list_id}", "DEBUG")
+        return True
+    status, resp = hs("PUT",
+        f"/crm/v3/lists/{list_id}/memberships/add-and-remove",
+        {"recordIdsToAdd": record_ids, "recordIdsToRemove": []}
+    )
+    if status == 200:
+        added = resp.get("recordIdsAdded", [])
+        log(f"  Re-added {len(added)} contact(s) to list — workflow will trigger for each")
+        return True
+    log(f"  Add to list failed: HTTP {status}", "WARN")
+    return False
 
 # ── Main ─────────────────────────────────────────────────────────────
 def main():
     log("=" * 55)
     log("AMZ Prep — Weekly Lead Report Email Sender")
     log(f"Run: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
-    if DRY_RUN: log("MODE: DRY RUN — no enrollments will be made", "WARN")
+    if DRY_RUN: log("MODE: DRY RUN — no list changes will be made", "WARN")
     log("=" * 55)
 
     if not HUBSPOT_TOKEN:
@@ -134,82 +153,86 @@ def main():
         names    = [x.strip() for x in PARTNER_FILTER.split(",")]
         partners = [p for p in partners if p["partner_name"] in names]
 
-    # Only process partners that have both list_id and workflow_id configured
+    # Only process partners with list_id configured
     partners = [
         p for p in partners
-        if p.get("hubspot_list_id") and p.get("hubspot_workflow_id")
+        if p.get("hubspot_list_id")
         and str(p["hubspot_list_id"]) != "REPLACE"
-        and str(p["hubspot_workflow_id"]) != "REPLACE"
+        and "REPLACE" not in str(p["hubspot_list_id"])
     ]
 
     if not partners:
-        log("No partners with hubspot_list_id + hubspot_workflow_id configured.", "WARN")
-        log("Add these fields to partners.json to enable list-based sending.")
+        log("No partners with hubspot_list_id configured.", "WARN")
         sys.exit(0)
 
-    log(f"Partners to send: {[p['partner_name'] for p in partners]}")
+    log(f"Partners to process: {[p['partner_name'] for p in partners]}")
 
     results = []
     for partner in partners:
-        name        = partner["partner_name"]
-        list_id     = str(partner["hubspot_list_id"])
-        workflow_id = str(partner["hubspot_workflow_id"])
+        name    = partner["partner_name"]
+        list_id = str(partner["hubspot_list_id"])
+        log(f"\n--- {name} (List: {list_id}) ---")
 
-        log(f"\n--- {name} ---")
-        log(f"  List ID: {list_id}  |  Workflow ID: {workflow_id}")
+        # Step 1 — Get current list members
+        record_ids = get_list_members(list_id)
+        log(f"  {len(record_ids)} recipient(s) in list")
 
-        # Step 1 — Get all contacts in the recipient list
-        contact_ids = get_list_contacts(list_id)
-        log(f"  {len(contact_ids)} recipient(s) found in list")
-
-        if not contact_ids:
-            log(f"  List is empty — skipping", "WARN")
-            results.append({"partner": name, "sent": 0, "failed": 0, "status": "empty_list"})
+        if not record_ids:
+            log("  List is empty — skipping", "WARN")
+            results.append({"partner": name, "count": 0, "status": "empty_list"})
             continue
 
-        # Step 2 — Enroll each contact in the workflow
-        sent = 0; failed = 0
-        for cid in contact_ids:
-            email, mkt_status = get_contact_email(cid)
-            if not email:
-                log(f"  Contact {cid}: no email — skipping", "WARN")
-                failed += 1
-                continue
+        # Step 2 — Fetch email addresses for logging
+        contacts = get_contact_emails(record_ids)
+        for rid, info in contacts.items():
+            log(f"  Recipient: {info['name']} <{info['email']}>")
 
-            # Ensure marketing contact status is true
-            if mkt_status != "true":
-                set_marketing_contact(cid)
-                time.sleep(0.1)
+        # Step 3 — Remove all contacts from list
+        log(f"  Removing {len(record_ids)} contact(s) from list...")
+        remove_ok = remove_from_list(list_id, record_ids)
 
-            ok = enroll_in_workflow(workflow_id, email)
-            status_str = "enrolled" if ok else "FAILED"
-            log(f"  {email}: {status_str}")
-            if ok: sent += 1
-            else:  failed += 1
-            time.sleep(0.3)   # rate limit buffer
+        if not remove_ok:
+            log("  Failed to remove contacts — skipping re-add", "ERROR")
+            results.append({"partner": name, "count": len(record_ids), "status": "error"})
+            continue
 
-        log(f"  Result: {sent} sent, {failed} failed")
-        results.append({"partner": name, "sent": sent, "failed": failed,
-                         "status": "ok" if failed == 0 else "partial"})
-        time.sleep(0.5)
+        # Brief pause to ensure HubSpot registers the removal
+        if not DRY_RUN:
+            log("  Waiting 3 seconds before re-adding...")
+            time.sleep(3)
 
-    # Summary
+        # Step 4 — Re-add all contacts to list
+        # This membership change triggers the workflow for each contact
+        log(f"  Re-adding {len(record_ids)} contact(s) to trigger workflow...")
+        add_ok = add_to_list(list_id, record_ids)
+
+        if add_ok:
+            log(f"  Workflow will fire for {len(record_ids)} recipient(s)")
+            results.append({"partner": name, "count": len(record_ids), "status": "ok"})
+        else:
+            log("  Re-add failed — contacts removed but NOT re-added", "ERROR")
+            log("  URGENT: Manually re-add contacts to the list in HubSpot", "ERROR")
+            results.append({"partner": name, "count": len(record_ids), "status": "error"})
+
+        time.sleep(1.0)
+
+    # ── Summary ──────────────────────────────────────────────────────
     log("\n" + "=" * 55)
     log("SEND SUMMARY")
-    col_p = 24; col_s = 7; col_f = 7; col_st = 12
-    sep = "-" * (col_p + col_s + col_f + col_st + 6)
-    log(f"{'Partner':<{col_p}}  {'Sent':>{col_s}}  {'Failed':>{col_f}}  {'Status':<{col_st}}")
+    col_p = 24; col_c = 9; col_s = 12
+    sep = "-" * (col_p + col_c + col_s + 4)
+    log(f"{'Partner':<{col_p}}  {'Recipients':>{col_c}}  {'Status':<{col_s}}")
     log(sep)
     any_fail = False
     for r in results:
-        log(f"{r['partner']:<{col_p}}  {r['sent']:>{col_s}}  {r['failed']:>{col_f}}  {r['status']:<{col_st}}")
-        if r["failed"] > 0: any_fail = True
+        log(f"{r['partner']:<{col_p}}  {str(r['count']):>{col_c}}  {r['status']:<{col_s}}")
+        if r["status"] == "error": any_fail = True
     log(sep)
 
     if any_fail:
-        log("Some enrollments failed — check workflow IDs and contact marketing status.", "WARN")
+        log("Errors occurred — check logs above.", "WARN")
         sys.exit(1)
-    log("All enrollments complete.")
+    log("All done. HubSpot workflows triggered for all recipients.")
 
 if __name__ == "__main__":
     main()
