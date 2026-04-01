@@ -77,6 +77,15 @@
       "slack_reps": [
         {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
       ]
+    },
+    {
+      "partner_name":    "Start-Ops",
+      "template_file":   "Weekly Lead Report - Start-Ops.html",
+      "recipient_email": "Start–Ops@amzprep.com",
+      "active": true,
+      "slack_reps": [
+        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+      ]
     }
   ]
 }
