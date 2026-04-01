@@ -1,97 +1,119 @@
 {
-  "_comment": "AMZ Prep partner config — used by both update_templates.py and friday_slack_notify.py",
-  "_slack_ids_reference": {
+  "_comment": "AMZ Prep partner config. Add hubspot_list_id and hubspot_workflow_id for list-based email sending.",
+  "_how_to_find_workflow_id": "HubSpot > Automation > Workflows > open workflow > check URL: /workflows/878268/platform/flow/{WORKFLOW_ID}/edit",
+  "_how_to_find_list_id": "HubSpot > Contacts > Lists > open list > check URL: /contacts/878268/lists/{LIST_ID}/filters",
+  "_slack_ids": {
     "Jerun Francis": "U0ACYKH849J",
     "Harishnath": "U07HW2GFSG4",
     "Arishekar N": "U06CP1PJN3Y"
   },
   "partners": [
     {
-      "partner_name":    "Emplicit",
-      "template_file":   "Weekly Lead Report - Emplicit.html",
-      "recipient_email": "emplicit@amzprep.com",
+      "partner_name":         "Emplicit",
+      "template_file":        "Weekly Lead Report - Emplicit.html",
+      "recipient_email":      "emplicit@amzprep.com",
+      "hubspot_list_id":      "REPLACE_WITH_EMPLICIT_LIST_ID",
+      "hubspot_workflow_id":  "REPLACE_WITH_EMPLICIT_WORKFLOW_ID",
       "active": true,
       "slack_reps": [
         {"name": "Arishekar N", "slack_user_id": "U06CP1PJN3Y"}
       ]
     },
     {
-      "partner_name":    "Hyla 437",
-      "template_file":   "Weekly Lead Report - Hyla 437.html",
-      "recipient_email": "hyla437@amzprep.com",
+      "partner_name":         "Hyla 437",
+      "template_file":        "Weekly Lead Report - Hyla 437.html",
+      "recipient_email":      "hyla437@amzprep.com",
+      "hubspot_list_id":      "REPLACE_WITH_HYLA437_LIST_ID",
+      "hubspot_workflow_id":  "REPLACE_WITH_HYLA437_WORKFLOW_ID",
       "active": true,
       "slack_reps": [
         {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
       ]
     },
     {
-      "partner_name":    "Walmart",
-      "template_file":   "Weekly Lead Report - Walmart.html",
-      "recipient_email": "walmart@amzprep.com",
+      "partner_name":         "Walmart",
+      "template_file":        "Weekly Lead Report - Walmart.html",
+      "recipient_email":      "walmart@amzprep.com",
+      "hubspot_list_id":      "8688",
+      "hubspot_workflow_id":  "184176472",
       "active": true,
       "slack_reps": [
         {"name": "Harishnath", "slack_user_id": "U07HW2GFSG4"}
       ]
     },
     {
-      "partner_name":    "Inspire Brands Group",
-      "template_file":   "Weekly Lead Report - Inspire Brands Group.html",
-      "recipient_email": "inspiregroup@amzprep.com",
+      "partner_name":         "Inspire Brands Group",
+      "template_file":        "Weekly Lead Report - Inspire Brands Group.html",
+      "recipient_email":      "inspiregroup@amzprep.com",
+      "hubspot_list_id":      "REPLACE_WITH_INSPIRE_LIST_ID",
+      "hubspot_workflow_id":  "REPLACE_WITH_INSPIRE_WORKFLOW_ID",
       "active": true,
       "slack_reps": [
         {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
       ]
     },
     {
-      "partner_name":    "EComm Architects",
-      "template_file":   "Weekly Lead Report - EComm Architects.html",
-      "recipient_email": "ecommarchitect@amzprep.com",
+      "partner_name":         "EComm Architects",
+      "template_file":        "Weekly Lead Report - EComm Architects.html",
+      "recipient_email":      "ecommarchitect@amzprep.com",
+      "hubspot_list_id":      "REPLACE_WITH_ECOMM_LIST_ID",
+      "hubspot_workflow_id":  "REPLACE_WITH_ECOMM_WORKFLOW_ID",
       "active": true,
       "slack_reps": [
         {"name": "Harishnath", "slack_user_id": "U07HW2GFSG4"}
       ]
     },
     {
-      "partner_name":    "Nexus",
-      "template_file":   "Weekly Lead Report - Nexus.html",
-      "recipient_email": "nexus@amzprep.com",
-      "active": true,
+      "partner_name":         "Nexus",
+      "template_file":        "Weekly Lead Report - Nexus.html",
+      "recipient_email":      "nexus@amzprep.com",
+      "hubspot_list_id":      "REPLACE_WITH_NEXUS_LIST_ID",
+      "hubspot_workflow_id":  "REPLACE_WITH_NEXUS_WORKFLOW_ID",
+      "active": false,
       "slack_reps": [
         {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
       ]
     },
     {
-      "partner_name":    "Space Command",
-      "template_file":   "Weekly Lead Report - Space Command.html",
-      "recipient_email": "spacecommand@amzprep.com",
-      "active": true,
+      "partner_name":         "Space Command",
+      "template_file":        "Weekly Lead Report - Space Command.html",
+      "recipient_email":      "spacecommand@amzprep.com",
+      "hubspot_list_id":      "REPLACE_WITH_SPACECOMMAND_LIST_ID",
+      "hubspot_workflow_id":  "REPLACE_WITH_SPACECOMMAND_WORKFLOW_ID",
+      "active": false,
       "slack_reps": [
         {"name": "Harishnath", "slack_user_id": "U07HW2GFSG4"}
       ]
     },
     {
-      "partner_name":    "ODP Group",
-      "template_file":   "Weekly Lead Report - ODP Group.html",
-      "recipient_email": "ODPgroup@amzprep.com",
-      "active": true,
+      "partner_name":         "ODP Group",
+      "template_file":        "Weekly Lead Report - ODP Group.html",
+      "recipient_email":      "odpgroup@amzprep.com",
+      "hubspot_list_id":      "REPLACE_WITH_ODP_LIST_ID",
+      "hubspot_workflow_id":  "REPLACE_WITH_ODP_WORKFLOW_ID",
+      "active": false,
       "slack_reps": [
         {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
       ]
     },
     {
-      "partner_name":    "Start-Ops",
-      "template_file":   "Weekly Lead Report - Start-Ops.html",
-      "recipient_email": "Start–Ops@amzprep.com",
-      "active": true,
+      "partner_name":         "Start-Ops",
+      "template_file":        "Weekly Lead Report - Start-Ops.html",
+      "recipient_email":      "startops@amzprep.com",
+      "hubspot_list_id":      "REPLACE_WITH_STARTOPS_LIST_ID",
+      "hubspot_workflow_id":  "REPLACE_WITH_STARTOPS_WORKFLOW_ID",
+      "active": false,
       "slack_reps": [
         {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
       ]
     },
     {
-      "partner_name":    "AMZ Optimized",
-      "template_file":   "Weekly Lead Report - AMZ Optimized.html",
-      "recipient_email": "AMZOptimized@amzprep.com",
-      "active": true,
+      "partner_name":         "AMZ Optimized",
+      "template_file":        "Weekly Lead Report - AMZ Optimized.html",
+      "recipient_email":      "amzoptimized@amzprep.com",
+      "hubspot_list_id":      "REPLACE_WITH_AMZOPTIMIZED_LIST_ID",
+      "hubspot_workflow_id":  "REPLACE_WITH_AMZOPTIMIZED_WORKFLOW_ID",
+      "active": false,
       "slack_reps": [
         {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
       ]
