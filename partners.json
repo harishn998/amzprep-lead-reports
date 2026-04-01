@@ -59,6 +59,15 @@
       "slack_reps": [
         {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
       ]
+    },
+    {
+      "partner_name":    "Space Command",
+      "template_file":   "Weekly Lead Report - Space Command.html",
+      "recipient_email": "spacecommand@amzprep.com",
+      "active": true,
+      "slack_reps": [
+        {"name": "Harishnath", "slack_user_id": "U07HW2GFSG4"}
+      ]
     }
   ]
 }
