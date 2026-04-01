@@ -1,0 +1,44 @@
+name: Send Weekly Lead Report Emails
+
+on:
+  # Every Monday at 3PM UTC = 10AM EST / 11AM EDT
+  schedule:
+    - cron: '0 15 * * 1'
+
+  # Manual trigger for testing or re-sending
+  workflow_dispatch:
+    inputs:
+      partner_filter:
+        description: 'Partner name to send (leave blank for all)'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry run — log only, no emails sent'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+jobs:
+  send-reports:
+    name: Enroll Recipients and Send Weekly Reports
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Send weekly report emails
+        run: python scripts/send_weekly_reports.py
+        env:
+          HUBSPOT_TOKEN:  ${{ secrets.HUBSPOT_TOKEN }}
+          PARTNER_FILTER: ${{ github.event.inputs.partner_filter || '' }}
+          DRY_RUN:        ${{ github.event.inputs.dry_run || 'false' }}
