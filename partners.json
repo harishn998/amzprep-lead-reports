@@ -70,7 +70,7 @@
       ]
     },
     {
-      "partner_name":    "Space Command",
+      "partner_name":    "ODP Group",
       "template_file":   "Weekly Lead Report - ODP Group.html",
       "recipient_email": "ODPgroup@amzprep.com",
       "active": true,
