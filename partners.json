@@ -5,7 +5,10 @@
   "_slack_ids": {
     "Jerun Francis": "U0ACYKH849J",
     "Harishnath": "U07HW2GFSG4",
-    "Arishekar N": "U06CP1PJN3Y"
+    "Arishekar N": "U06CP1PJN3Y",
+    "Rich Pearl": "U08V34EPC5S",
+    "Angelo": "U06MUUDNVRS",
+    "Diggy": "U05B6GKFYR4"
   },
   "partners": [
     {
@@ -16,7 +19,7 @@
       "hubspot_workflow_id":  "183831644",
       "active": true,
       "slack_reps": [
-        {"name": "Arishekar N", "slack_user_id": "U06CP1PJN3Y"}
+        {"name": "Angelo", "slack_user_id": "U06MUUDNVRS"}
       ]
     },
     {
@@ -27,7 +30,7 @@
       "hubspot_workflow_id":  "219390529",
       "active": true,
       "slack_reps": [
-        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+        {"name": "Diggy", "slack_user_id": "U05B6GKFYR4"}
       ]
     },
     {
@@ -38,7 +41,7 @@
       "hubspot_workflow_id":  "184176472",
       "active": true,
       "slack_reps": [
-        {"name": "Harishnath", "slack_user_id": "U07HW2GFSG4"}
+        {"name": "Diggy", "slack_user_id": "U05B6GKFYR4"}
       ]
     },
     {
@@ -49,7 +52,7 @@
       "hubspot_workflow_id":  "10670516",
       "active": true,
       "slack_reps": [
-        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
       ]
     },
     {
@@ -60,7 +63,7 @@
       "hubspot_workflow_id":  "190193513",
       "active": true,
       "slack_reps": [
-        {"name": "Harishnath", "slack_user_id": "U07HW2GFSG4"}
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
       ]
     },
     {
@@ -71,7 +74,7 @@
       "hubspot_workflow_id":  "589098761",
       "active": true,
       "slack_reps": [
-        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
       ]
     },
     {
@@ -82,7 +85,7 @@
       "hubspot_workflow_id":  "605951326",
       "active": true,
       "slack_reps": [
-        {"name": "Harishnath", "slack_user_id": "U07HW2GFSG4"}
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
       ]
     },
     {
@@ -93,7 +96,7 @@
       "hubspot_workflow_id":  "593422503",
       "active": true,
       "slack_reps": [
-        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
       ]
     },
     {
@@ -104,7 +107,7 @@
       "hubspot_workflow_id":  "560019476",
       "active": true,
       "slack_reps": [
-        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
       ]
     },
     {
@@ -115,7 +118,7 @@
       "hubspot_workflow_id":  "557789800",
       "active": true,
       "slack_reps": [
-        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
       ]
     }
   ]
