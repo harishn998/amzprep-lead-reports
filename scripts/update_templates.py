@@ -189,13 +189,29 @@ def classify_deal(stage):
 
 
 def get_next_monday_date():
-    """Returns the upcoming Monday date string e.g. 'March 30, 2026'"""
+    """Returns the date range string for the report week.
+    Script runs Sunday night to update templates for Monday send.
+    The report covers the PREVIOUS Monday through the PREVIOUS Sunday.
+    Example: script runs Sun Apr 5 → send is Mon Apr 6 → report covers Mar 30 – Apr 5, 2026
+    """
     from datetime import timedelta
-    now_utc = datetime.now(timezone.utc)
-    days_ahead = (0 - now_utc.weekday()) % 7
-    if days_ahead == 0:
-        days_ahead = 7
-    return (now_utc + timedelta(days=days_ahead)).strftime("%B %d, %Y")
+    now_utc   = datetime.now(timezone.utc)
+    # Next Monday = the send date
+    days_to_monday = (0 - now_utc.weekday()) % 7
+    if days_to_monday == 0:
+        days_to_monday = 7
+    send_monday   = now_utc + timedelta(days=days_to_monday)
+    # Previous week: Monday = 7 days before send_monday, Sunday = 1 day before send_monday
+    week_start    = send_monday - timedelta(days=7)   # previous Monday
+    week_end      = send_monday - timedelta(days=1)   # previous Sunday
+    # Format: "March 30 – April 5, 2026"
+    # Use %-d to strip leading zero from day numbers (Linux/GitHub Actions compatible)
+    if week_start.month == week_end.month:
+        # Same month: "April 6 – 12, 2026"
+        return f"{week_start.strftime('%B %-d')} – {week_end.strftime('%-d, %Y')}"
+    else:
+        # Different months: "March 30 – April 5, 2026"
+        return f"{week_start.strftime('%B %-d')} – {week_end.strftime('%B %-d, %Y')}"
 
 
 def generate_variable_block(partner_name, contacts, total_count):
