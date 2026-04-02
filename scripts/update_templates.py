@@ -688,7 +688,7 @@ def process_partner(partner):
     import re as _re2
     date_match = _re2.search(r'set report_date = "([^"]+)"', current_template)
     current_date_in_template = date_match.group(1) if date_match else ""
-    expected_date = send_date   # send_date is already computed above via get_next_monday_date()
+    expected_date = get_next_monday_date()   # call directly — send_date is scoped to generate_variable_block()
     date_changed  = (current_date_in_template != expected_date)
     if date_changed:
         log(f"  report_date outdated: template has '{current_date_in_template}', expected '{expected_date}'")
