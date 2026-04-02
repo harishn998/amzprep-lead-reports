@@ -69,7 +69,7 @@
       "recipient_email":      "nexus@amzprep.com",
       "hubspot_list_id":      "8698",
       "hubspot_workflow_id":  "589098761",
-      "active": false,
+      "active": true,
       "slack_reps": [
         {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
       ]
@@ -80,7 +80,7 @@
       "recipient_email":      "spacecommand@amzprep.com",
       "hubspot_list_id":      "8699",
       "hubspot_workflow_id":  "605951326",
-      "active": false,
+      "active": true,
       "slack_reps": [
         {"name": "Harishnath", "slack_user_id": "U07HW2GFSG4"}
       ]
@@ -91,7 +91,7 @@
       "recipient_email":      "odpgroup@amzprep.com",
       "hubspot_list_id":      "8700",
       "hubspot_workflow_id":  "593422503",
-      "active": false,
+      "active": true,
       "slack_reps": [
         {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
       ]
@@ -102,7 +102,7 @@
       "recipient_email":      "startops@amzprep.com",
       "hubspot_list_id":      "8701",
       "hubspot_workflow_id":  "560019476",
-      "active": false,
+      "active": true,
       "slack_reps": [
         {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
       ]
@@ -113,7 +113,7 @@
       "recipient_email":      "amzoptimized@amzprep.com",
       "hubspot_list_id":      "8702",
       "hubspot_workflow_id":  "557789800",
-      "active": false,
+      "active": true,
       "slack_reps": [
         {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
       ]
