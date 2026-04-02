@@ -683,7 +683,17 @@ def process_partner(partner):
     if structure_outdated:
         log("  Template structure outdated (missing pair[7] or c.company present) — regenerating")
 
-    result["changed"] = bool(added or removed or count_changed or status_changed or company_changed or structure_outdated)
+    # Always check if report_date needs updating — this changes every week
+    # regardless of whether contacts/deals changed
+    import re as _re2
+    date_match = _re2.search(r'set report_date = "([^"]+)"', current_template)
+    current_date_in_template = date_match.group(1) if date_match else ""
+    expected_date = send_date   # send_date is already computed above via get_next_monday_date()
+    date_changed  = (current_date_in_template != expected_date)
+    if date_changed:
+        log(f"  report_date outdated: template has '{current_date_in_template}', expected '{expected_date}'")
+
+    result["changed"] = bool(added or removed or count_changed or status_changed or company_changed or structure_outdated or date_changed)
 
     if not result["changed"]:
         log("  No changes detected — template is up to date")
