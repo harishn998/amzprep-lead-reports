@@ -1,9 +1,11 @@
 name: Send Weekly Lead Report Emails
 
 on:
-  # Every Monday at 3PM UTC = 10AM EST / 11AM EDT
+  # 2:45 PM UTC = 9:45 AM EST / 10:45 AM EDT
+  # Scheduled 15 minutes early + off the hour to avoid GitHub queue congestion.
+  # Even with a 10-minute runner delay, emails land before 10AM EST.
   schedule:
-    - cron: '0 15 * * 1'
+    - cron: '45 14 * * 1'
 
   # Manual trigger for testing or re-sending
   workflow_dispatch:
