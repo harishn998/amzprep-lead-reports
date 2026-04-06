@@ -189,29 +189,44 @@ def classify_deal(stage):
 
 
 def get_next_monday_date():
-    """Returns the date range string for the report week.
-    Script runs Sunday night to update templates for Monday send.
-    The report covers the PREVIOUS Monday through the PREVIOUS Sunday.
-    Example: script runs Sun Apr 5 → send is Mon Apr 6 → report covers Mar 30 – Apr 5, 2026
+    """
+    Returns the PREVIOUS week's date range as a formatted string.
+    The report always covers the Mon–Sun of the week BEFORE the send date.
+
+    Rules:
+      - If running ON Monday  → today IS the send date → report = last Mon–Sun
+      - If running on Sunday  → tomorrow is send date  → report = last Mon–Sun
+      - Any other day         → treated same as Sunday (finds coming Monday)
+
+    Examples:
+      Runs Mon Apr  6  → send = Apr  6  → "March 30 – April 5, 2026"   ✓
+      Runs Sun Apr  5  → send = Apr  6  → "March 30 – April 5, 2026"   ✓
+      Runs Mon Apr 13  → send = Apr 13  → "April 6 – 12, 2026"         ✓
+      Runs Sun Apr 12  → send = Apr 13  → "April 6 – 12, 2026"         ✓
     """
     from datetime import timedelta
-    now_utc   = datetime.now(timezone.utc)
-    # Next Monday = the send date
-    days_to_monday = (0 - now_utc.weekday()) % 7
-    if days_to_monday == 0:
-        days_to_monday = 7
-    send_monday   = now_utc + timedelta(days=days_to_monday)
-    # Previous week: Monday = 7 days before send_monday, Sunday = 1 day before send_monday
-    week_start    = send_monday - timedelta(days=7)   # previous Monday
-    week_end      = send_monday - timedelta(days=1)   # previous Sunday
-    # Format: "March 30 – April 5, 2026"
-    # Use %-d to strip leading zero from day numbers (Linux/GitHub Actions compatible)
+    now_utc = datetime.now(timezone.utc)
+    weekday = now_utc.weekday()  # 0 = Monday … 6 = Sunday
+
+    if weekday == 0:
+        # Running ON Monday — today is the send date
+        send_monday = now_utc
+    else:
+        # Running any other day (typically Sunday night) — find next Monday
+        days_to_monday = (0 - weekday) % 7  # e.g. Sunday(6) → 1 day ahead
+        send_monday = now_utc + timedelta(days=days_to_monday)
+
+    # Previous week: 7 days back from send Monday
+    week_start = send_monday - timedelta(days=7)   # previous Monday
+    week_end   = send_monday - timedelta(days=1)   # previous Sunday
+
+    # Format — %-d strips leading zero on Linux/GitHub Actions
     if week_start.month == week_end.month:
         # Same month: "April 6 – 12, 2026"
-        return f"{week_start.strftime('%B %-d')} – {week_end.strftime('%-d, %Y')}"
+        return f"{week_start.strftime('%B %-d')} \u2013 {week_end.strftime('%-d, %Y')}"
     else:
-        # Different months: "March 30 – April 5, 2026"
-        return f"{week_start.strftime('%B %-d')} – {week_end.strftime('%B %-d, %Y')}"
+        # Cross-month: "March 30 – April 5, 2026"
+        return f"{week_start.strftime('%B %-d')} \u2013 {week_end.strftime('%B %-d, %Y')}"
 
 
 def generate_variable_block(partner_name, contacts, total_count):
