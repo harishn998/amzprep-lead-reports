@@ -12,6 +12,7 @@
   },
   "_dm_observers_note": "These users receive a DM copy of every Friday partner briefing. Each DM includes which sales rep owns that partner. To add a new observer: add an entry below with name and slack_user_id.",
   "dm_observers": [
+    {"name": "Arishekar N",   "slack_user_id": "U06CP1PJN3Y"},
     {"name": "Harishnath",    "slack_user_id": "U07HW2GFSG4"}
   ],
   "partners": [
@@ -78,7 +79,7 @@
       "hubspot_workflow_id":  "589098761",
       "active": true,
       "slack_reps": [
-        {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"}
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
       ]
     },
     {
