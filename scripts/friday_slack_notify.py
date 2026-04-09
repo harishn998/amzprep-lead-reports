@@ -342,41 +342,47 @@ def main():
         data    = build_report(name, contacts)
         dm_text = build_dm_message(name, data, today)
 
-        # ── Send DM to assigned sales rep(s) ──────────────────────
-        dm_ok_count = 0
+        # ── Build recipient list: reps + observers in one group DM ──
+        # All user IDs combined — Slack opens a single group DM (MPIM)
+        # so everyone sees the same message in the same conversation.
+        all_recipients = []
         for rep in reps:
-            uid      = rep.get("slack_user_id", "")
-            rep_name = rep.get("name", uid)
+            uid = rep.get("slack_user_id", "")
+            if uid and not uid.startswith("REPLACE"):
+                all_recipients.append({"name": rep.get("name", uid), "uid": uid})
+        for obs in dm_observers:
+            uid = obs.get("slack_user_id", "")
+            if uid and not uid.startswith("REPLACE"):
+                all_recipients.append({"name": obs.get("name", uid), "uid": uid})
 
-            if not uid or uid.startswith("REPLACE"):
-                log(f"  Rep '{rep_name}' has no valid slack_user_id — skipping DM", "WARN")
-                continue
-
-            dm_channel = open_dm_channel(uid)
-            if dm_channel:
-                ok = slack_post(dm_channel, dm_text)
-                log(f"  DM → rep {rep_name} ({uid}): {'sent ✓' if ok else 'FAILED'}")
-                if ok: dm_ok_count += 1
-            else:
-                log(f"  Could not open DM with {rep_name}", "WARN")
-            time.sleep(0.5)
-
-        # ── Send same DM to all dm_observers ─────────────────────
-        # Observers receive the identical message as the assigned rep —
-        # same full lead report, no modifications.
+        dm_ok_count      = 0
         observer_ok_count = 0
-        for observer in dm_observers:
-            uid      = observer["slack_user_id"]
-            obs_name = observer.get("name", uid)
 
-            dm_channel = open_dm_channel(uid)
-            if dm_channel:
-                ok = slack_post(dm_channel, dm_text)
-                log(f"  DM → observer {obs_name} ({uid}): {'sent ✓' if ok else 'FAILED'}")
-                if ok: observer_ok_count += 1
+        if not all_recipients:
+            log("  No valid recipients — skipping DM", "WARN")
+        else:
+            # Open one group DM with all recipient IDs comma-separated
+            uid_list   = ",".join(r["uid"] for r in all_recipients)
+            name_list  = ", ".join(r["name"] for r in all_recipients)
+            log(f"  Opening group DM with: {name_list}")
+
+            group_channel = open_dm_channel(uid_list)
+            if group_channel:
+                ok = slack_post(group_channel, dm_text)
+                log(f"  Group DM sent to [{name_list}]: {'✓' if ok else 'FAILED'}")
+                if ok:
+                    dm_ok_count       = sum(1 for r in reps if r.get("slack_user_id"))
+                    observer_ok_count = len(dm_observers)
             else:
-                log(f"  Could not open DM with observer {obs_name}", "WARN")
-            time.sleep(0.5)
+                log(f"  Could not open group DM — falling back to individual DMs", "WARN")
+                # Fallback: send individually if group DM fails
+                for r in all_recipients:
+                    ch = open_dm_channel(r["uid"])
+                    if ch:
+                        ok = slack_post(ch, dm_text)
+                        log(f"  Fallback DM → {r['name']}: {'✓' if ok else 'FAILED'}")
+                        if ok: dm_ok_count += 1
+                    time.sleep(0.5)
 
         # ── Post compact notification to #tech-feature-testing ─────
         rep_tags  = " ".join(
