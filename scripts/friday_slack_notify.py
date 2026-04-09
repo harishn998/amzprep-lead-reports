@@ -6,11 +6,15 @@ Schedule: Every Friday at 9AM EST (cron: 0 14 * * 5)
 For each active partner:
   1. DMs the assigned sales rep(s) with a full text summary
      matching the weekly email template structure
-  2. Posts a compact notification to #tech-feature-testing
+  2. DMs all dm_observers (defined in partners.json) with the same
+     full report, plus a header showing which rep owns that partner
+  3. Posts a compact notification to #tech-feature-testing
      confirming the briefing was sent
 
 Rep assignment is in partners.json → "slack_reps" list.
-Adding a new partner = add one entry to partners.json, no code changes.
+Observer DMs are in partners.json → "dm_observers" list (top-level).
+Adding a new observer = add one entry to dm_observers in partners.json, no code changes.
+Adding a new partner  = add one entry to partners array in partners.json, no code changes.
 
 Required GitHub Secrets:
   SLACK_BOT_TOKEN  — xoxb-... Bot User OAuth Token
@@ -203,7 +207,7 @@ def build_dm_message(partner_name, data, today):
 
     # ── CLOSED WON ────────────────────────────────────────────────
     if data["won_deals"]:
-        col_d = 32; col_c = 24; col_a = 10
+        col_d = 32; col_c = 20; col_a = 10
         L.append(f"CLOSED WON  ({len(data['won_deals'])})")
         L.append(f"  {'Deal':<{col_d}}  {'Company':<{col_c}}  {'Value':<{col_a}}")
         L.append("  " + "-" * (col_d + col_c + col_a + 4))
@@ -232,6 +236,10 @@ def build_dm_message(partner_name, data, today):
     L.append(sep)
     L.append("Data pulled live from HubSpot. Reply with any updates before Monday send.")
     return "```\n" + "\n".join(L) + "\n```"
+
+
+
+
 
 # ── Slack API ────────────────────────────────────────────────────────
 def slack_post(channel_id, message):
@@ -303,6 +311,16 @@ def main():
         names    = [x.strip() for x in PARTNER_FILTER.split(",")]
         partners = [p for p in partners if p["partner_name"] in names]
 
+    # Load global observer list — receives a DM copy of every partner briefing
+    dm_observers = [
+        o for o in config.get("dm_observers", [])
+        if o.get("slack_user_id") and not o["slack_user_id"].startswith("REPLACE")
+    ]
+    if dm_observers:
+        log(f"Observer DMs enabled for: {[o['name'] for o in dm_observers]}")
+    else:
+        log("No dm_observers configured — observer DMs skipped", "WARN")
+
     log(f"Partners: {[p['partner_name'] for p in partners]}")
     today   = datetime.now(timezone.utc).strftime("%B %d, %Y")
     results = []
@@ -324,6 +342,7 @@ def main():
         data    = build_report(name, contacts)
         dm_text = build_dm_message(name, data, today)
 
+        # ── Send DM to assigned sales rep(s) ──────────────────────
         dm_ok_count = 0
         for rep in reps:
             uid      = rep.get("slack_user_id", "")
@@ -333,21 +352,41 @@ def main():
                 log(f"  Rep '{rep_name}' has no valid slack_user_id — skipping DM", "WARN")
                 continue
 
-            # Open DM channel and send full report
             dm_channel = open_dm_channel(uid)
             if dm_channel:
                 ok = slack_post(dm_channel, dm_text)
-                log(f"  DM to {rep_name} ({uid}): {'sent' if ok else 'FAILED'}")
+                log(f"  DM → rep {rep_name} ({uid}): {'sent ✓' if ok else 'FAILED'}")
                 if ok: dm_ok_count += 1
             else:
                 log(f"  Could not open DM with {rep_name}", "WARN")
             time.sleep(0.5)
 
-        # Post compact notification to #tech-feature-testing
+        # ── Send same DM to all dm_observers ─────────────────────
+        # Observers receive the identical message as the assigned rep —
+        # same full lead report, no modifications.
+        observer_ok_count = 0
+        for observer in dm_observers:
+            uid      = observer["slack_user_id"]
+            obs_name = observer.get("name", uid)
+
+            dm_channel = open_dm_channel(uid)
+            if dm_channel:
+                ok = slack_post(dm_channel, dm_text)
+                log(f"  DM → observer {obs_name} ({uid}): {'sent ✓' if ok else 'FAILED'}")
+                if ok: observer_ok_count += 1
+            else:
+                log(f"  Could not open DM with observer {obs_name}", "WARN")
+            time.sleep(0.5)
+
+        # ── Post compact notification to #tech-feature-testing ─────
         rep_tags  = " ".join(
             f"<@{r['slack_user_id']}>"
             for r in reps
             if r.get("slack_user_id") and not r["slack_user_id"].startswith("REPLACE")
+        )
+        observer_tags = " ".join(
+            f"<@{o['slack_user_id']}>"
+            for o in dm_observers
         )
         notif_msg = (
             f"Friday Briefing: {name}  |  Rep: {rep_tags}\n"
@@ -355,17 +394,20 @@ def main():
             f"Connected: {data['connected']}    "
             f"Active Deals: {len(data['active_deals'])}    "
             f"Closed Won: {len(data['won_deals'])}\n"
-            f"Full report delivered as direct message to assigned rep(s)."
+            f"Full report delivered as DM to rep(s). "
+            f"Observer copy sent to: {observer_tags}"
         )
         ch_ok = slack_post(TECH_CHANNEL, notif_msg)
-        log(f"  #tech-feature-testing notification: {'sent' if ch_ok else 'FAILED'}")
+        log(f"  #tech-feature-testing notification: {'sent ✓' if ch_ok else 'FAILED'}")
 
         results.append({
-            "partner": name, "status": "ok",
-            "contacts": len(contacts),
-            "active_deals": len(data["active_deals"]),
-            "won": len(data["won_deals"]),
-            "dm_sent": dm_ok_count,
+            "partner":        name,
+            "status":         "ok",
+            "contacts":       len(contacts),
+            "active_deals":   len(data["active_deals"]),
+            "won":            len(data["won_deals"]),
+            "dm_sent":        dm_ok_count,
+            "observer_sent":  observer_ok_count,
         })
         time.sleep(1.0)
 
@@ -399,6 +441,9 @@ def main():
             f"{s:<{col_s}}"
         )
     summary.append(sep_f)
+    if dm_observers:
+        observer_names = ", ".join(o["name"] for o in dm_observers)
+        summary.append(f"Observer copies sent to: {observer_names}")
     summary.append("All assigned reps have been briefed. Monday 10AM EST automated send proceeds as scheduled.")
 
     slack_post(TECH_CHANNEL, "\n".join(summary))
