@@ -167,6 +167,17 @@ def build_dm_message(partner_name, data, today):
     L.append(f"Friday {today}  |  Action required before Monday 10AM EST send")
     L.append(sep)
 
+    # ── Action Required — top of message to set tone ──────────────
+    L.append("ACTION REQUIRED — Please review before Monday 10AM EST:")
+    L.append("  1. Check all lead statuses above are accurate")
+    L.append("  2. Update any deal stages or values that have moved")
+    L.append("  3. Flag any contacts that should be removed or corrected")
+    L.append("  4. Reply here if anything needs attention before we send to the partner")
+    L.append("")
+    L.append("If no issues are flagged by Monday morning, the report goes out as shown above.")
+    L.append(sep)
+    L.append("")
+
     # ── Summary row ───────────────────────────────────────────────
     L.append(
         f"Total: {data['total']}    "
@@ -178,27 +189,27 @@ def build_dm_message(partner_name, data, today):
 
     # ── CONNECTED ─────────────────────────────────────────────────
     if data["connected_list"]:
-        col_n = 28; col_c = 24
+        col_n = 22; col_c = 22
         L.append(f"CONNECTED  ({data['connected']})")
-        L.append(f"  {'Name':<{col_n}}  {'Company':<{col_c}}")
-        L.append("  " + "-" * (col_n + col_c + 2))
+        L.append(f"{'Name':<{col_n}}  {'Company':<{col_c}}")
+        L.append("-" * (col_n + col_c + 2))
         for c in data["connected_list"]:
             fn   = (c["properties"].get("firstname") or "").strip()
             ln   = (c["properties"].get("lastname")  or "").strip()
             name = (fn + " " + ln).strip() or c["properties"].get("email","")
             co   = c["properties"].get("company") or "—"
-            L.append(f"  {name:<{col_n}}  {co:<{col_c}}")
+            L.append(f"{name[:col_n]:<{col_n}}  {co[:col_c]:<{col_c}}")
         L.append("")
 
     # ── DEAL STATUS ───────────────────────────────────────────────
     if data["active_deals"]:
-        col_d = 32; col_c = 20; col_s = 14; col_a = 10
+        col_d = 24; col_c = 18; col_s = 12; col_a = 10
         L.append(f"DEAL STATUS  ({len(data['active_deals'])})")
-        L.append(f"  {'Deal':<{col_d}}  {'Company':<{col_c}}  {'Stage':<{col_s}}  {'Value':<{col_a}}")
-        L.append("  " + "-" * (col_d + col_c + col_s + col_a + 6))
+        L.append(f"{'Deal':<{col_d}}  {'Company':<{col_c}}  {'Stage':<{col_s}}  {'Value':<{col_a}}")
+        L.append("-" * (col_d + col_c + col_s + col_a + 6))
         for d in data["active_deals"]:
             L.append(
-                f"  {d['deal'][:col_d]:<{col_d}}  "
+                f"{d['deal'][:col_d]:<{col_d}}  "
                 f"{d['company'][:col_c]:<{col_c}}  "
                 f"{d['stage'][:col_s]:<{col_s}}  "
                 f"{d['amount']:<{col_a}}"
@@ -207,42 +218,34 @@ def build_dm_message(partner_name, data, today):
 
     # ── CLOSED WON ────────────────────────────────────────────────
     if data["won_deals"]:
-        col_d = 32; col_c = 20; col_a = 10
+        col_d = 24; col_c = 18; col_a = 10
         L.append(f"CLOSED WON  ({len(data['won_deals'])})")
-        L.append(f"  {'Deal':<{col_d}}  {'Company':<{col_c}}  {'Value':<{col_a}}")
-        L.append("  " + "-" * (col_d + col_c + col_a + 4))
+        L.append(f"{'Deal':<{col_d}}  {'Company':<{col_c}}  {'Value':<{col_a}}")
+        L.append("-" * (col_d + col_c + col_a + 4))
         for d in data["won_deals"]:
             L.append(
-                f"  {d['deal'][:col_d]:<{col_d}}  "
+                f"{d['deal'][:col_d]:<{col_d}}  "
                 f"{d['company'][:col_c]:<{col_c}}  "
                 f"{d['amount']:<{col_a}}"
             )
         L.append("")
 
     # ── ALL LEADS ─────────────────────────────────────────────────
-    col_n = 28; col_c = 24; col_s = 20
+    col_n = 22; col_c = 20; col_s = 16
     L.append(f"ALL LEADS  ({data['total']})")
-    L.append(f"  #   {'Name':<{col_n}}  {'Company':<{col_c}}  {'Lead Status':<{col_s}}")
-    L.append("  " + "-" * (4 + col_n + col_c + col_s + 4))
+    L.append(f"{'#':<3}  {'Name':<{col_n}}  {'Company':<{col_c}}  {'Status':<{col_s}}")
+    L.append("-" * (3 + col_n + col_c + col_s + 6))
     for idx, c in enumerate(data["all_contacts"], 1):
         fn   = (c["properties"].get("firstname") or "").strip()
         ln   = (c["properties"].get("lastname")  or "").strip()
         name = (fn + " " + ln).strip() or c["properties"].get("email","")
         co   = c["properties"].get("company") or "—"
         st   = fmt_status(c["properties"].get("hs_lead_status") or "NEW")
-        L.append(f"  {idx:<3} {name[:col_n]:<{col_n}}  {co[:col_c]:<{col_c}}  {st:<{col_s}}")
+        L.append(f"{idx:<3}  {name[:col_n]:<{col_n}}  {co[:col_c]:<{col_c}}  {st:<{col_s}}")
 
     L.append("")
     L.append(sep)
     L.append("Data pulled live from HubSpot at time of this message.")
-    L.append("")
-    L.append("ACTION REQUIRED — Please review before Monday 10AM EST:")
-    L.append("  1. Check all lead statuses above are accurate")
-    L.append("  2. Update any deal stages or values that have moved")
-    L.append("  3. Flag any contacts that should be removed or corrected")
-    L.append("  4. Reply here if anything needs attention before we send to the partner")
-    L.append("")
-    L.append("If no issues are flagged by Monday morning, the report goes out as shown above.")
     return "```\n" + "\n".join(L) + "\n```"
 
 
