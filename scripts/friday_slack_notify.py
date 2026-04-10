@@ -164,7 +164,7 @@ def build_dm_message(partner_name, data, today):
 
     # ── Header ────────────────────────────────────────────────────
     L.append(f"Weekly Lead Report: {partner_name}")
-    L.append(f"Friday {today}  |  Preview before Monday 10AM EST send")
+    L.append(f"Friday {today}  |  Action required before Monday 10AM EST send")
     L.append(sep)
 
     # ── Summary row ───────────────────────────────────────────────
@@ -234,7 +234,15 @@ def build_dm_message(partner_name, data, today):
 
     L.append("")
     L.append(sep)
-    L.append("Data pulled live from HubSpot. Reply with any updates before Monday send.")
+    L.append("Data pulled live from HubSpot at time of this message.")
+    L.append("")
+    L.append("ACTION REQUIRED — Please review before Monday 10AM EST:")
+    L.append("  1. Check all lead statuses above are accurate")
+    L.append("  2. Update any deal stages or values that have moved")
+    L.append("  3. Flag any contacts that should be removed or corrected")
+    L.append("  4. Reply here if anything needs attention before we send to the partner")
+    L.append("")
+    L.append("If no issues are flagged by Monday morning, the report goes out as shown above.")
     return "```\n" + "\n".join(L) + "\n```"
 
 
