@@ -141,7 +141,7 @@ def build_report(partner_name, contacts):
         is_won = (st in WON_ST or dstage in CW_STAGES) and st not in CHURN_ST
         if is_won:
             won_deals.append({"deal":dname,"company":co,"amount":amt_s})
-        elif dstage not in CL_STAGES:
+        elif dstage not in CL_STAGES and dstage not in CW_STAGES:
             active_deals.append({
                 "deal":dname,"company":co,
                 "stage":STAGE_MAP.get(dstage, dstage or "—"),
