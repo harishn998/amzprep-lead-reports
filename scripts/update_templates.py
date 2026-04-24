@@ -174,6 +174,47 @@ def fetch_deal_id(contact_id):
     return None
 
 
+def fetch_referral_call_contacts(partner_name):
+    """
+    Fetch contacts where referral_call_by_partner = partner_name.
+    These are AMZ Prep prospects the referral partner joined a reference call with.
+    Generic — works for any partner. Returns list of enriched contact dicts.
+    """
+    log(f"  Fetching referral call contacts for: {partner_name}")
+    body = {
+        "filterGroups": [{"filters": [{
+            "propertyName": "referral_call_by_partner",
+            "operator": "EQ",
+            "value": partner_name
+        }]}],
+        "properties": ["firstname", "lastname", "email", "company", "hs_lead_status"],
+        "sorts": [{"propertyName": "createdate", "direction": "ASCENDING"}],
+        "limit": 50,
+    }
+    status, resp = hs_request("POST", "/crm/v3/objects/contacts/search", body)
+    if status != 200:
+        log(f"  Referral call contacts API failed: {status}", "WARN")
+        return []
+    contacts = resp.get("results", [])
+    # Fetch deal ID and details for each contact
+    for c in contacts:
+        did = fetch_deal_id(c["id"])
+        c["deal_id"] = did
+        if did:
+            ds_status, ds_resp = hs_request(
+                "GET", f"/crm/v3/objects/deals/{did}?properties=dealname,dealstage,amount"
+            )
+            props = ds_resp.get("properties", {}) if ds_status == 200 else {}
+            c["deal_name"]   = (props.get("dealname")  or "").strip()
+            c["deal_stage"]  = (props.get("dealstage") or "")
+            c["deal_amount"] = (props.get("amount")    or "")
+        else:
+            c["deal_name"] = c["deal_stage"] = c["deal_amount"] = ""
+        time.sleep(0.1)
+    log(f"  Found {len(contacts)} referral call contact(s) for {partner_name}")
+    return contacts
+
+
 # ── Template Generator ─────────────────────────────────────────────
 CLOSED_WON_STAGES  = {"13390264", "closedwon", "1271308872"}
 CLOSED_LOST_STAGES = {"13390265", "closedlost"}
@@ -229,7 +270,7 @@ def get_next_monday_date():
         return f"{week_start.strftime('%B %-d')} \u2013 {week_end.strftime('%B %-d, %Y')}"
 
 
-def generate_variable_block(partner_name, contacts, total_count):
+def generate_variable_block(partner_name, contacts, total_count, referral_call_contacts=None):
     """
     Production-ready HubL variable block generator.
     Hardcodes contact data, uses crm_object only for ACTIVE deals,
@@ -435,9 +476,75 @@ def generate_variable_block(partner_name, contacts, total_count):
         )
     lines += ["] %}", ""]
 
+    # ── Referral Call contacts (generic — any partner can use this) ──────────
+    # Contacts where referral_call_by_partner = partner_name in HubSpot.
+    # These are AMZ Prep prospects the partner joined reference calls with.
+    # Only injected when there are referral call contacts — ignored for all other partners.
+    rc_contacts = referral_call_contacts or []
+    if rc_contacts:
+        lines.append("{# \u2500\u2500 Referral Call contacts \u2014 prospects partner joined a call with \u2500\u2500 #}")
+        for i, c in enumerate(rc_contacts, 1):
+            fn = (c["properties"].get("firstname") or "").replace('"', '\\"')
+            ln = (c["properties"].get("lastname")  or "").replace('"', '\\"')
+            em = (c["properties"].get("email")     or "").replace('"', '\\"')
+            co = (c["properties"].get("company")   or "").replace('"', '\\"')
+            lines.append(
+                "{% set rc" + str(i) + " = {"
+                + '"firstname": "' + fn + '", '
+                + '"lastname": "' + ln + '", '
+                + '"email": "' + em + '", '
+                + '"company": "' + co + '"'
+                + "} %}"
+            )
+        lines.append("")
+
+        # Unique deals for referral call contacts
+        lines.append("{# \u2500\u2500 Referral call deals \u2014 fetched live at send time \u2500\u2500 #}")
+        unique_rc_deals = {}
+        for c in rc_contacts:
+            did = c.get("deal_id")
+            if did and did not in unique_rc_deals:
+                unique_rc_deals[did] = "_rcdeal_" + did
+                lines.append(
+                    '{% set _rcdeal_' + did + ' = crm_object("deal", "' + did + '", '
+                    + '"dealname,dealstage,amount") %}'
+                )
+        if not unique_rc_deals:
+            lines.append("{# No deals associated with referral call contacts #}")
+        lines.append("")
+
+        # Assign deal per referral call contact
+        lines.append("{# \u2500\u2500 Assign deal per referral call contact \u2500\u2500 #}")
+        for i, c in enumerate(rc_contacts, 1):
+            did = c.get("deal_id")
+            var = unique_rc_deals.get(did, "null") if did else "null"
+            lines.append("{% set rcd" + str(i) + " = " + var + " %}")
+        lines.append("")
+
+        # Referral call count and pairs
+        lines.append("{% set rpt_referral_calls = " + str(len(rc_contacts)) + " %}")
+        lines.append("")
+        lines.append("{# \u2500\u2500 Referral call pairs: [contact_dict, deal, company, full_name] \u2500\u2500 #}")
+        lines.append("{# rcpair[2]=company rcpair[3]=full_name — hardcoded to avoid HubL dict-access quirk in loops 2+ #}")
+        lines.append("{% set referral_call_pairs = [")
+        for i, c in enumerate(rc_contacts, 1):
+            comma = "," if i < len(rc_contacts) else ""
+            co = (c["properties"].get("company")   or "").replace('"', '\\"').strip()
+            fn = (c["properties"].get("firstname") or "").strip()
+            ln = (c["properties"].get("lastname")  or "").strip()
+            nm = ((fn + " " + ln).strip() or c["properties"].get("email") or "").replace('"', '\\"')
+            lines.append('  [rc' + str(i) + ', rcd' + str(i) + ', "' + co + '", "' + nm + '"]' + comma)
+        lines.append("] %}")
+        lines.append("")
+    else:
+        # No referral calls for this partner — set count to 0 so template renders correctly
+        lines.append("{% set rpt_referral_calls = 0 %}")
+        lines.append("{% set referral_call_pairs = [] %}")
+        lines.append("")
+
     return "\n".join(lines)
 
-def regenerate_template(current_template, partner_name, contacts, total_count):
+def regenerate_template(current_template, partner_name, contacts, total_count, referral_call_contacts=None):
     """
     Replace ONLY the variable block at the top of the template.
     Everything from the Stage label macro onwards is kept VERBATIM,
@@ -511,7 +618,7 @@ def regenerate_template(current_template, partner_name, contacts, total_count):
         return before + after
     preserved_section = fix_table4_company(preserved_section)
 
-    new_block = generate_variable_block(partner_name, contacts, total_count)
+    new_block = generate_variable_block(partner_name, contacts, total_count, referral_call_contacts)
     return new_block + preserved_section
 
 
@@ -611,6 +718,10 @@ def process_partner(partner):
 
     result["contacts_found"] = total
 
+    # Fetch referral call contacts (generic — contacts where referral_call_by_partner = partner)
+    # Returns [] for partners with no referral calls, populated list for partners like Hyla 437
+    referral_call_contacts = fetch_referral_call_contacts(name)
+
     # Fetch deal IDs for contacts — only needed to check deal count vs template
     # We fetch all but will only use crm_object for ACTIVE (non-closed) deals
     CLOSED_STAGES = {"13390264", "13390265", "closedwon", "closedlost",
@@ -708,7 +819,16 @@ def process_partner(partner):
     if date_changed:
         log(f"  report_date outdated: template has '{current_date_in_template}', expected '{expected_date}'")
 
-    result["changed"] = bool(added or removed or count_changed or status_changed or company_changed or structure_outdated or date_changed)
+    # Also check if referral call count changed vs template
+    import re as _re3
+    rc_match = _re3.search(r'set rpt_referral_calls = (\d+)', current_template)
+    current_rc_count  = int(rc_match.group(1)) if rc_match else -1
+    expected_rc_count = len(referral_call_contacts)
+    rc_changed = (current_rc_count != expected_rc_count)
+    if rc_changed:
+        log(f"  rpt_referral_calls mismatch: template has {current_rc_count}, live has {expected_rc_count}")
+
+    result["changed"] = bool(added or removed or count_changed or status_changed or company_changed or structure_outdated or date_changed or rc_changed)
 
     if not result["changed"]:
         log("  No changes detected — template is up to date")
@@ -716,7 +836,7 @@ def process_partner(partner):
 
     # Phase D — Regenerate template
     log(f"  Regenerating template variable block...")
-    new_template = regenerate_template(current_template, name, contacts, total)
+    new_template = regenerate_template(current_template, name, contacts, total, referral_call_contacts)
     if new_template is None:
         result["status"] = "error"
         result["error"] = "Template regeneration failed — split marker not found"
