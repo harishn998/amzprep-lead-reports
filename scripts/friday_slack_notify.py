@@ -149,12 +149,50 @@ def build_report(partner_name, contacts):
             })
         time.sleep(0.1)
 
+    # Fetch referral call contacts — generic, returns [] for partners with none
+    referral_calls = []
+    s_rc, r_rc = hs("POST", "/crm/v3/objects/contacts/search", {
+        "filterGroups": [{"filters": [{
+            "propertyName": "referral_call_by_partner",
+            "operator": "EQ", "value": partner_name
+        }]}],
+        "properties": ["firstname","lastname","email","company"],
+        "limit": 50
+    })
+    if s_rc == 200:
+        for rc in r_rc.get("results", []):
+            fn  = (rc["properties"].get("firstname") or "").strip()
+            ln  = (rc["properties"].get("lastname")  or "").strip()
+            co  = rc["properties"].get("company") or "—"
+            em  = rc["properties"].get("email") or ""
+            # Fetch associated deal
+            s_d, r_d = hs("GET", f"/crm/v3/objects/contacts/{rc['id']}/associations/deals")
+            deal_name = deal_stage = deal_amt = "—"
+            if s_d == 200 and r_d.get("results"):
+                did = r_d["results"][0]["id"]
+                s_dd, r_dd = hs("GET", f"/crm/v3/objects/deals/{did}?properties=dealname,dealstage,amount")
+                if s_dd == 200:
+                    dp2       = r_dd.get("properties", {})
+                    deal_name = (dp2.get("dealname") or "—").strip()
+                    deal_stage= STAGE_MAP.get(dp2.get("dealstage",""), dp2.get("dealstage","") or "—")
+                    amt2      = dp2.get("amount","")
+                    deal_amt  = f"${float(amt2):,.0f}" if amt2 else "—"
+            referral_calls.append({
+                "name": (fn + " " + ln).strip() or em,
+                "company": co,
+                "deal": deal_name,
+                "stage": deal_stage,
+                "amount": deal_amt,
+            })
+            time.sleep(0.1)
+
     return {
         "total": n, "connected": len(connected),
         "connected_list": connected,
         "active_deals": active_deals,
         "won_deals": won_deals,
         "all_contacts": contacts,
+        "referral_calls": referral_calls,
     }
 
 def build_dm_message(partner_name, data, today):
@@ -179,11 +217,14 @@ def build_dm_message(partner_name, data, today):
     L.append("")
 
     # ── Summary row ───────────────────────────────────────────────
+    ref_calls = data.get("referral_calls", [])
+    ref_part  = f"    Referral Calls: {len(ref_calls)}" if ref_calls else ""
     L.append(
         f"Total: {data['total']}    "
         f"Connected: {data['connected']}    "
         f"Active Deals: {len(data['active_deals'])}    "
         f"Closed Won: {len(data['won_deals'])}"
+        f"{ref_part}"
     )
     L.append("")
 
@@ -227,6 +268,24 @@ def build_dm_message(partner_name, data, today):
                 f"{d['deal'][:col_d]:<{col_d}}  "
                 f"{d['company'][:col_c]:<{col_c}}  "
                 f"{d['amount']:<{col_a}}"
+            )
+        L.append("")
+
+    # ── REFERRAL CALLS ────────────────────────────────────────────
+    # Shows contacts the partner joined reference calls with (generic — any partner)
+    ref_calls = data.get("referral_calls", [])
+    if ref_calls:
+        col_n = 22; col_c = 20; col_d = 24; col_s = 14; col_a = 10
+        L.append(f"REFERRAL CALLS  ({len(ref_calls)})")
+        L.append(f"{'Name':<{col_n}}  {'Company':<{col_c}}  {'Deal':<{col_d}}  {'Stage':<{col_s}}  {'Value':<{col_a}}")
+        L.append("-" * (col_n + col_c + col_d + col_s + col_a + 8))
+        for r in ref_calls:
+            L.append(
+                f"{r['name'][:col_n]:<{col_n}}  "
+                f"{r['company'][:col_c]:<{col_c}}  "
+                f"{r['deal'][:col_d]:<{col_d}}  "
+                f"{r['stage'][:col_s]:<{col_s}}  "
+                f"{r['amount']:<{col_a}}"
             )
         L.append("")
 
