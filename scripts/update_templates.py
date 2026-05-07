@@ -618,6 +618,19 @@ def regenerate_template(current_template, partner_name, contacts, total_count, r
         return before + after
     preserved_section = fix_table4_company(preserved_section)
 
+    # ── Auto-remove Manage Preferences link from footer ─────────────────────
+    # HubSpot requires Unsubscribe for CAN-SPAM — Manage Preferences is optional.
+    # Removing it keeps the footer clean for all partner-facing email templates.
+    import re as _re_prefs
+    cleaned = _re_prefs.sub(
+        r'<span[^>]*?>&nbsp;[^<]*?</span>\s*<a[^>]*?subscription_preferences_link[^>]*?>\s*Manage Preferences\s*</a>',
+        '',
+        preserved_section
+    )
+    if cleaned != preserved_section:
+        preserved_section = cleaned
+        log("  Auto-removed Manage Preferences link from footer", "DEBUG")
+
     new_block = generate_variable_block(partner_name, contacts, total_count, referral_call_contacts)
     return new_block + preserved_section
 
