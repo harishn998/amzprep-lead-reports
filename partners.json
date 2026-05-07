@@ -10,19 +10,11 @@
     "Angelo": "U06MUUDNVRS",
     "Diggy": "U05B6GKFYR4"
   },
-  "_dm_observers_note": "These users receive a DM copy of every Friday partner briefing.",
+  "_dm_observers_note": "These users receive a DM copy of every Friday partner briefing. Each DM includes which sales rep owns that partner. To add a new observer: add an entry below with name and slack_user_id.",
   "dm_observers": [
     {"name": "Arishekar N",   "slack_user_id": "U06CP1PJN3Y"},
-    {"name": "Jerun Francis", "slack_user_id": "U0ACYKH849J"},
     {"name": "Harishnath",    "slack_user_id": "U07HW2GFSG4"}
   ],
-  "_cc_contact_ids_note": "Global CC — enrolled in every partner workflow send and receive the same rendered Design Manager template. TEST PHASE: Harishnath, Ari, Jerun only. After testing confirmed, add Blair (143723204246).",
-  "cc_contact_ids": [
-    218271133348,
-    217663854083,
-    219555281219
-  ],
-  "_cc_upgrade_note": "After testing: add per-partner AE cc_contact_ids — Angelo (143017953393) for Emplicit, Diggy (143017820741) for Hyla 437 + Walmart, Rich (143012204572) for all others. Also add Blair (143723204246) to global cc_contact_ids.",
   "partners": [
     {
       "partner_name":         "Emplicit",
@@ -31,8 +23,9 @@
       "hubspot_list_id":      "8691",
       "hubspot_workflow_id":  "183831644",
       "active": true,
-      "slack_reps": [{"name": "Angelo", "slack_user_id": "U06MUUDNVRS"}],
-      "cc_contact_ids": []
+      "slack_reps": [
+        {"name": "Angelo", "slack_user_id": "U06MUUDNVRS"}
+      ]
     },
     {
       "partner_name":         "Hyla 437",
@@ -41,8 +34,9 @@
       "hubspot_list_id":      "8692",
       "hubspot_workflow_id":  "219390529",
       "active": true,
-      "slack_reps": [{"name": "Diggy", "slack_user_id": "U05B6GKFYR4"}],
-      "cc_contact_ids": []
+      "slack_reps": [
+        {"name": "Diggy", "slack_user_id": "U05B6GKFYR4"}
+      ]
     },
     {
       "partner_name":         "Walmart",
@@ -51,8 +45,9 @@
       "hubspot_list_id":      "8688",
       "hubspot_workflow_id":  "184176472",
       "active": true,
-      "slack_reps": [{"name": "Diggy", "slack_user_id": "U05B6GKFYR4"}],
-      "cc_contact_ids": []
+      "slack_reps": [
+        {"name": "Diggy", "slack_user_id": "U05B6GKFYR4"}
+      ]
     },
     {
       "partner_name":         "Inspire Brands Group",
@@ -61,8 +56,9 @@
       "hubspot_list_id":      "8696",
       "hubspot_workflow_id":  "10670516",
       "active": true,
-      "slack_reps": [{"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}],
-      "cc_contact_ids": []
+      "slack_reps": [
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
+      ]
     },
     {
       "partner_name":         "EComm Architects",
@@ -71,8 +67,9 @@
       "hubspot_list_id":      "8690",
       "hubspot_workflow_id":  "190193513",
       "active": true,
-      "slack_reps": [{"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}],
-      "cc_contact_ids": []
+      "slack_reps": [
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
+      ]
     },
     {
       "partner_name":         "Nexus",
@@ -81,8 +78,9 @@
       "hubspot_list_id":      "8698",
       "hubspot_workflow_id":  "589098761",
       "active": true,
-      "slack_reps": [{"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}],
-      "cc_contact_ids": []
+      "slack_reps": [
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
+      ]
     },
     {
       "partner_name":         "Space Command",
@@ -91,8 +89,9 @@
       "hubspot_list_id":      "8699",
       "hubspot_workflow_id":  "605951326",
       "active": true,
-      "slack_reps": [{"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}],
-      "cc_contact_ids": []
+      "slack_reps": [
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
+      ]
     },
     {
       "partner_name":         "ODP Group",
@@ -101,8 +100,9 @@
       "hubspot_list_id":      "8700",
       "hubspot_workflow_id":  "593422503",
       "active": true,
-      "slack_reps": [{"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}],
-      "cc_contact_ids": []
+      "slack_reps": [
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
+      ]
     },
     {
       "partner_name":         "Start-Ops",
@@ -111,8 +111,9 @@
       "hubspot_list_id":      "8701",
       "hubspot_workflow_id":  "560019476",
       "active": true,
-      "slack_reps": [{"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}],
-      "cc_contact_ids": []
+      "slack_reps": [
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
+      ]
     },
     {
       "partner_name":         "AMZ Optimized",
@@ -121,8 +122,9 @@
       "hubspot_list_id":      "8702",
       "hubspot_workflow_id":  "557789800",
       "active": true,
-      "slack_reps": [{"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}],
-      "cc_contact_ids": []
+      "slack_reps": [
+        {"name": "Rich Pearl", "slack_user_id": "U08V34EPC5S"}
+      ]
     }
   ]
 }
