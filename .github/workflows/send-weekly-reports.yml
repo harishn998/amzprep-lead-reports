@@ -22,14 +22,6 @@ on:
         options:
           - 'false'
           - 'true'
-      test_cc_only:
-        description: 'Test CC — send only to internal CC team, skip real partner contacts'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
 
 jobs:
   send-reports:
@@ -49,7 +41,6 @@ jobs:
       - name: Send weekly report emails
         run: python scripts/send_weekly_reports.py
         env:
-          HUBSPOT_TOKEN:   ${{ secrets.HUBSPOT_TOKEN }}
-          PARTNER_FILTER:  ${{ github.event.inputs.partner_filter || '' }}
-          DRY_RUN:         ${{ github.event.inputs.dry_run || 'false' }}
-          TEST_CC_ONLY:    ${{ github.event.inputs.test_cc_only || 'false' }}
+          HUBSPOT_TOKEN:  ${{ secrets.HUBSPOT_TOKEN }}
+          PARTNER_FILTER: ${{ github.event.inputs.partner_filter || '' }}
+          DRY_RUN:        ${{ github.event.inputs.dry_run || 'false' }}
